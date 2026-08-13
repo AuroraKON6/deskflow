@@ -481,9 +481,20 @@ namespace DeskFlow
             Instance = this;
             string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DeskFlow", "WebView2");
             Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", dataDir);
+            List<string> flags = new List<string>();
             double s = WidgetForm_Helper.Scale();
-            if (Math.Abs(s - 1.0) > 0.01)
-                Environment.SetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--force-device-scale-factor=" + s.ToString("0.00"));
+            if (Math.Abs(s - 1.0) > 0.01) flags.Add("--force-device-scale-factor=" + s.ToString("0.00"));
+            // memory: drop GPU process, crashpad, background networking (widget app needs none of them)
+            flags.Add("--disable-gpu");
+            flags.Add("--disable-crashpad");
+            flags.Add("--disable-background-networking");
+            flags.Add("--disable-sync");
+            flags.Add("--disable-component-update");
+            flags.Add("--no-first-run");
+            flags.Add("--no-default-browser-check");
+            flags.Add("--disable-features=msSmartScreenProtection");
+            flags.Add("--js-flags=--max-old-space-size=96");
+            Environment.SetEnvironmentVariable("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", string.Join(" ", flags.ToArray()));
             BuildTray();
         }
 
