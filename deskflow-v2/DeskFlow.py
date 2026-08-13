@@ -43,7 +43,7 @@ clr.AddReference("System.Windows.Forms")
 
 from System import Enum as SysEnum  # noqa: E402
 from System.Collections.Specialized import StringCollection  # noqa: E402
-from System.Drawing import Color, Point, Size, SystemIcons  # noqa: E402
+from System.Drawing import Color, Point, Size, SystemIcons, Font, FontStyle  # noqa: E402
 from System.Windows.Forms import (  # noqa: E402
     Application,
     CheckBox,
@@ -405,51 +405,60 @@ class WidgetForm(Form):
 class StartupDialog(Form):
     def __init__(self, selected: list[str], auto_start: bool) -> None:
         super().__init__()
+        s = dpi_scale()
         self.Text = "序 · 桌面组件选择"
         self.FormBorderStyle = SysEnum.Parse(FormBorderStyle, "FixedDialog")
         self.StartPosition = FormStartPosition.CenterScreen
         self.MaximizeBox = False
         self.MinimizeBox = False
-        self.AutoSize = True
+        self.ClientSize = Size(int(360 * s), int(330 * s))
         self._checks: dict[str, CheckBox] = {}
-        self._auto = None
+        font_label = Font("Microsoft YaHei UI", 12, FontStyle.Bold)
+        font_ui = Font("Microsoft YaHei UI", 10)
 
-        y = 18
         label = Label()
         label.Text = "今天在桌面上放哪些组件?"
-        label.Location = Point(20, y)
+        label.Font = font_label
         label.AutoSize = True
+        label.Location = Point(int(24 * s), int(20 * s))
         self.Controls.Add(label)
-        y += 34
+
+        y = int(62 * s)
         for name, (label_txt, desc) in MODULES.items():
             check = CheckBox()
             check.Text = f"{label_txt} — {desc}"
             check.Checked = name in selected
-            check.Location = Point(22, y)
             check.AutoSize = True
+            check.Location = Point(int(26 * s), y)
+            check.Font = font_ui
             self._checks[name] = check
             self.Controls.Add(check)
-            y += 36
+            y += int(36 * s)
+
         self._auto = CheckBox()
         self._auto.Text = "开机自动启动"
         self._auto.Checked = auto_start
-        self._auto.Location = Point(22, y)
         self._auto.AutoSize = True
+        self._auto.Location = Point(int(26 * s), y + int(4 * s))
+        self._auto.Font = font_ui
         self.Controls.Add(self._auto)
-        y += 44
+
         cancel = Button()
         cancel.Text = "取消"
-        cancel.Location = Point(22, y)
-        cancel.Size = Size(80, 30)
+        cancel.Location = Point(int(150 * s), y + int(48 * s))
+        cancel.Size = Size(int(88 * s), int(34 * s))
+        cancel.Font = font_ui
         cancel.Click += self._on_cancel
         self.Controls.Add(cancel)
         ok = Button()
         ok.Text = "放到桌面上 →"
-        ok.Location = Point(120, y)
-        ok.Size = Size(130, 30)
+        ok.Location = Point(int(244 * s), y + int(48 * s))
+        ok.Size = Size(int(96 * s), int(34 * s))
+        ok.Font = font_ui
         ok.Click += self._on_ok
         self.Controls.Add(ok)
-        self.ClientSize = Size(320, y + 44)
+        self.AcceptButton = ok
+        self.CancelButton = cancel
 
     def _on_cancel(self, sender, e):
         self.DialogResult = DialogResult.Cancel
