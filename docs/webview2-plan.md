@@ -104,3 +104,21 @@ RAM 大头是 Chromium 内核;WebView2 路线后,宿主 DLL 全部走系统(不�
 3. WinForms DPI-aware 下坐标是物理像素,必须乘/除 dpi_scale()
 4. `.venv\Scripts\python.exe` 是启动器,会派生子进程(正常行为,勿误判双实例)
 5. PyInstaller 打包:--add-data 放 webview2lib DLL + WebView2Loader.dll
+
+## Phase 3b — C# 外壳(deskflow-v3,2026-08-13)
+
+用户要求继续压 → 用 C#(.NET Framework 4.8 WinForms)+ WebView2 重写外壳,
+csc.exe(Windows 自带)编译,零第三方运行时。
+
+| 版本 | zip | dist | 宿主内存 | 总内存 |
+|---|---|---|---|---|
+| v1 QtWebEngine | 109.6MB | 250MB | 295MB | ~436MB |
+| v2 Python+WebView2 | 17.0MB | 30.3MB | 122MB | ~594MB |
+| **v3 C#+WebView2** | **3.4MB** | **4.15MB** | **58MB** | ~535MB |
+
+- exe 本体 30KB;dist 大头是 WebView2 SDK(Core 650KB + Loader 162KB)+ concepts
+- 编译: deskflow-v3/build.ps1(csc + 引用 WebView2 DLL + 拷贝 concepts)
+- 功能/设计/架构不变,与 v2 同一套 index.html + shim + 注册表
+- 内存上限:WebView2 Chromium ~476MB 固有,无法再降(除非放弃 HTML 渲染)
+- C# 5 语法限制(csc 4.8):无 ?./$""/表达式体,已规避
+- 踩坑:AllowExternalDrop 在 WinForms 控件属性上,不在 CoreWebView2
