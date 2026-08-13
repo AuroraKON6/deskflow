@@ -140,3 +140,17 @@ csc.exe(Windows 自带)编译,零第三方运行时。
 
 结论:内存已到 WebView2 极限 —— 剩余 371MB 是 Chromium 浏览器+2 渲染进程固有;
 再降只能放弃 HTML 渲染(换 QML/原生 Qt,需重写视觉)。
+
+## Phase 3d — 透明黑边修复 + 内存实测修正(2026-08-13)
+
+用户反馈:透明窗口有一圈明显方框黑边。
+
+根因:OnShown 里 SetWindowLong 改 WS_EX_NOREDIRECTIONBITMAP 不生效(重定向表面已分配)。
+修复:重写 CreateParams 覆盖,在窗口创建前指定 ExStyle|WS_EX_NOREDIRECTIONBITMAP。
+验证:有/无窗口像素对比,顶部/底部/右边透明恢复正常;MiMo 确认画面自然、无黑边/灰带。
+
+**重要修正**:修复透明要求 GPU 合成,必须回退 --disable-gpu。
+- 之前报的 429MB(关 GPU)是**牺牲透明度的假象**,黑边不可接受
+- 修复后稳定内存 **~495MB**(保留 crashpad/网络/同步/组件更新/SmartScreen/V8 堆 等安全参数,省 ~21MB)
+- 透明窗口的 GPU 进程 ~110-130MB 是硬成本,无法规避
+- 结论:内存已到 WebView2 + 透明 + HTML 渲染的组合极限;再降必须放弃透明或 HTML
