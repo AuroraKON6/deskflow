@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>桌面计划 · 视觉概念</title>
+  <style>
+    /* Layer 1 — primitives */
+    :root {
+      --p-white: hsl(0 0% 100%);
+      --p-ink-950: hsl(225 26% 8%);
+      --p-ink-900: hsl(224 24% 11%);
+      --p-ink-800: hsl(223 20% 16%);
+      --p-ink-700: hsl(221 17% 23%);
+      --p-slate-500: hsl(220 10% 48%);
+      --p-slate-300: hsl(216 12% 75%);
+      --p-blue-500: hsl(217 91% 63%);
+      --p-blue-400: hsl(216 96% 69%);
+      --p-cyan-400: hsl(189 94% 66%);
+      --p-green-400: hsl(153 66% 58%);
+      --p-pink-300: hsl(334 82% 79%);
+      --p-coral-500: hsl(8 83% 63%);
+      --p-cream-50: hsl(40 38% 96%);
+      --p-cream-100: hsl(38 40% 92%);
+      --p-brown-900: hsl(24 20% 16%);
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --radius-sm: 10px;
+      --radius-md: 16px;
+      --radius-lg: 22px;
+      --radius-xl: 30px;
+      --duration-fast: 160ms;
+      --duration-normal: 260ms;
+      --duration-celebrate: 720ms;
+      --ease-out: cubic-bezier(.2,.8,.2,1);
+      --ease-spring: cubic-bezier(.2,1.45,.35,1);
+      --font-ui: "Microsoft YaHei UI", "PingFang SC", "Segoe UI", sans-serif;
+    }
+
+    /* Layer 2 — semantic tokens (night default) */
+    body[data-theme="night"] {
+      --color-stage-1: hsl(227 42% 11%);
+      --color-stage-2: hsl(218 39% 7%);
+      --color-window: hsl(223 25% 12% / .94);
+      --color-surface: hsl(222 22% 17% / .92);
+      --color-surface-raised: hsl(221 20% 21% / .96);
+      --color-surface-soft: hsl(220 23% 26% / .62);
+      --color-text: hsl(216 32% 96%);
+      --color-text-muted: hsl(218 12% 69%);
+      --color-primary: var(--p-blue-400);
+      --color-primary-soft: hsl(216 96% 69% / .17);
+      --color-success: var(--p-green-400);
+      --color-accent: var(--p-cyan-400);
+      --color-border: hsl(216 30% 88% / .09);
+      --color-shadow: hsl(225 60% 2% / .58);
+      --color-file: hsl(219 25% 25% / .82);
+      --window-blur: 18px;
+      --surface-blur: 14px;
+      --window-image: none;
+    }
+
+    body[data-theme="mist"] {
+      --color-stage-1: hsl(35 40% 89%);
+      --color-stage-2: hsl(202 25% 88%);
+      --color-window: hsl(42 38% 97% / .96);
+      --color-surface: hsl(0 0% 100% / .78);
+      --color-surface-raised: hsl(0 0% 100% / .96);
+      --color-surface-soft: hsl(36 34% 91% / .86);
+      --color-text: var(--p-brown-900);
+      --color-text-muted: hsl(24 10% 44%);
+      --color-primary: var(--p-coral-500);
+      --color-primary-soft: hsl(8 83% 63% / .14);
+      --color-success: hsl(151 46% 43%);
+      --color-accent: hsl(203 52% 48%);
+      --color-border: hsl(25 25% 23% / .08);
+      --color-shadow: hsl(24 31% 28% / .18);
+      --color-file: hsl(38 42% 92% / .96);
+      --window-blur: 14px;
+      --surface-blur: 10px;
+      --window-image: none;
+    }
+
+    body[data-theme="sakura"] {
+      --color-stage-1: hsl(229 51% 9%);
+      --color-stage-2: hsl(221 55% 5%);
+      --color-window: hsl(225 30% 8% / .48);
+      --color-surface: hsl(226 22% 15% / .55);
+      --color-surface-raised: hsl(226 23% 19% / .73);
+      --color-surface-soft: hsl(228 24% 21% / .55);
+      --color-text: hsl(225 33% 98%);
+      --color-text-muted: hsl(224 22% 82%);
+      --color-primary: hsl(329 82% 80%);
+      --color-primary-soft: hsl(329 82% 76% / .19);
+      --color-success: hsl(153 70% 65%);
+      --color-accent: hsl(217 96% 76%);
+      --color-border: hsl(326 80% 95% / .16);
+      --color-shadow: hsl(230 71% 3% / .66);
+      --color-file: hsl(226 24% 18% / .64);
+      --window-blur: 8px;
+      --surface-blur: 18px;
+      --window-image: url("assets/sakura-twilight.png");
+    }
+
+    /* Layer 3 — component tokens */
+    :root {
+      --window-bg: var(--color-window);
+      --window-radius: var(--radius-xl);
+      --window-shadow: 0 28px 90px var(--color-shadow), inset 0 0 0 1px var(--color-border);
+      --card-bg: var(--color-surface);
+      --card-border: var(--color-border);
+      --card-radius: var(--radius-md);
+      --task-height: 58px;
+      --check-size: 23px;
+      --button-bg: var(--color-primary);
+      --button-fg: var(--p-ink-950);
+      --file-bg: var(--color-file);
+      --focus-ring: 0 0 0 3px var(--color-primary-soft);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      color: var(--color-text);
+      background: linear-gradient(145deg, var(--color-stage-1), var(--color-stage-2));
+      overflow: hidden;
+      transition: background 400ms ease, color 240ms ease;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .stage {
+      min-height: 100vh;
+      position: relative;
+      display: grid;
+      place-items: center;
+      padding: 28px 30px;
+      isolation: isolate;
+      overflow: hidden;
+    }
+    .stage::before,
+    .stage::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      filter: blur(4px);
+      opacity: .6;
+      z-index: -2;
+    }
+    .stage::before {
+      width: 520px; height: 520px; left: -160px; top: -150px;
+      background: radial-gradient(circle, var(--color-primary-soft), transparent 68%);
+    }
+    .stage::after {
+      width: 620px; height: 620px; right: -210px; bottom: -240px;
+      background: radial-gradient(circle, color-mix(in hsl, var(--color-accent) 22%, transparent), transparent 67%);
+    }
+
+    .concept-meta {
+      position: fixed;
+      left: 32px;
+      top: 30px;
+      width: 280px;
+      z-index: 8;
+      user-select: none;
+    }
+    .eyebrow {
+      color: var(--color-primary);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .concept-meta h1 { margin: 8px 0 10px; font-size: 30px; letter-spacing: -.03em; }
+    .concept-meta p { margin: 0; color: var(--color-text-muted); font-size: 14px; line-height: 1.7; }
+    .theme-switcher { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+    .theme-chip {
+      border: 1px solid var(--color-border);
+      background: var(--color-surface);
+      backdrop-filter: blur(12px);
+      border-radius: 999px;
+      padding: 7px 11px;
+      cursor: pointer;
+      color: var(--color-text-muted);
+      transition: transform var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
+    }
+    .theme-chip:hover { transform: translateY(-2px); color: var(--color-text); }
+    .theme-chip.active { background: var(--color-primary); color: var(--button-fg); border-color: transparent; }
+
+    .app-window {
+      position: relative;
+      width: 468px;
+      height: min(900px, calc(100vh - 42px));
+      border-radius: var(--window-radius);
+      overflow: hidden;
+      background: var(--window-bg);
+      box-shadow: var(--window-shadow);
+      backdrop-filter: blur(var(--window-blur)) saturate(125%);
+      transform: translate3d(110px, 0, 0);
+      transition: background 360ms ease, box-shadow 360ms ease, transform 80ms linear;
+      user-select: none;
+    }
+    .wallpaper {
+      position: absolute;
+      inset: 0;
+      z-index: -3;
+      background-image: var(--window-image);
+      background-size: cover;
+      background-position: center;
+      transition: opacity 300ms ease, background-image 300ms ease;
+    }
+    body[data-theme="sakura"] .wallpaper { opacity: 1; }
+    body:not([data-theme="sakura"]) .wallpaper { opacity: 0; }
+    .wallpaper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, hsl(227 45% 6% / .27), hsl(227 51% 5% / .62));
+    }
+    #petals { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+
+    .app-content {
+      position: relative;
+      height: 100%;
+      overflow: auto;
+      scrollbar-width: none;
+      padding: 0 18px 96px;
+    }
+    .app-content::-webkit-scrollbar { display: none; }
+    .titlebar {
+      position: sticky;
+      top: 0;
+      z-index: 6;
+      margin: 0 -18px;
+      padding: 16px 18px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, var(--color-window) 58%, transparent);
+      backdrop-filter: blur(10px);
+      cursor: grab;
+    }
+    .titlebar:active { cursor: grabbing; }
+    .title-group { display: flex; align-items: center; gap: 11px; }
+    .app-mark {
+      width: 36px; height: 36px; display: grid; place-items: center;
+      border-radius: 13px;
+      color: var(--button-fg);
+      background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+      box-shadow: 0 8px 24px var(--color-primary-soft);
+      font-weight: 900;
+    }
+    .title-copy strong { display: block; font-size: 16px; }
+    .title-copy span { display: block; margin-top: 2px; color: var(--color-text-muted); font-size: 11px; }
+    .window-actions { display: flex; gap: 7px; }
+    .icon-button {
+      width: 34px; height: 34px; border: 1px solid var(--color-border);
+      border-radius: 12px; background: var(--color-surface); cursor: pointer;
+      display: grid; place-items: center; transition: transform var(--duration-fast), background var(--duration-fast);
+      backdrop-filter: blur(10px);
+    }
+    .icon-button:hover { transform: translateY(-2px); background: var(--color-surface-raised); }
+    .icon-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+    .overview {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 16px;
+      margin: 4px 0 16px;
+      border: 1px solid var(--card-border);
+      background: linear-gradient(135deg, var(--color-primary-soft), var(--card-bg));
+      border-radius: var(--card-radius);
+      backdrop-filter: blur(var(--surface-blur));
+    }
+    .overview-kicker { color: var(--color-text-muted); font-size: 11px; }
+    .overview-title { margin-top: 5px; font-size: 19px; font-weight: 800; }
+    .overview-title em { color: var(--color-primary); font-style: normal; }
+    .progress-ring {
+      width: 52px; height: 52px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: conic-gradient(var(--color-primary) 0 40%, var(--color-surface-soft) 40% 100%);
+      position: relative;
+    }
+    .progress-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--color-surface-raised); }
+    .progress-ring span { position: relative; z-index: 1; font-size: 11px; font-weight: 800; }
+
+    .section { margin-top: 15px; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px; }
+    .section-title { display: flex; align-items: center; gap: 8px; }
+    .section-title h2 { margin: 0; font-size: 14px; letter-spacing: .01em; }
+    .section-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-primary); box-shadow: 0 0 12px var(--color-primary); }
+    .section-meta { font-size: 11px; color: var(--color-text-muted); }
+
+    .task-list { display: grid; gap: 8px; }
+    .task {
+      min-height: var(--task-height);
+      padding: 10px 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 11px;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      backdrop-filter: blur(var(--surface-blur));
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      transition: opacity 280ms ease, transform 430ms var(--ease-out), min-height 430ms ease, padding 430ms ease, margin 430ms ease, border-width 430ms ease;
+    }
+    .task:hover { transform: translateY(-2px); background: var(--color-surface-raised); }
+    .task-copy strong { display: block; font-size: 13px; font-weight: 700; }
+    .task-copy span { display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 10px; }
+    .task-tag { padding: 5px 8px; border-radius: 999px; background: var(--color-primary-soft); color: var(--color-primary); font-size: 9px; }
+    .check {
+      width: var(--check-size); height: var(--check-size); border-radius: 8px;
+      border: 1.5px solid color-mix(in hsl, var(--color-text-muted) 70%, transparent);
+      background: transparent; cursor: pointer; position: relative;
+      display: grid; place-items: center;
+      transition: transform 260ms var(--ease-spring), background 160ms, border-color 160ms, box-shadow 260ms;
+    }
+    .check:hover { transform: scale(1.1); border-color: var(--color-primary); }
+    .check svg { width: 14px; opacity: 0; transform: scale(.4) rotate(-25deg); transition: 260ms var(--ease-spring); }
+    .task.completing .check { background: var(--color-success); border-color: var(--color-success); transform: scale(1.18); box-shadow: 0 0 0 9px color-mix(in hsl, var(--color-success) 15%, transparent), 0 0 24px color-mix(in hsl, var(--color-success) 55%, transparent); }
+    .task.completing .check svg { opacity: 1; transform: scale(1) rotate(0); }
+    .task.completing .task-copy strong { text-decoration: line-through; text-decoration-color: var(--color-success); text-decoration-thickness: 2px; }
+    .task.completed { opacity: 0; transform: translateX(54px) scale(.94); min-height: 0; height: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+
+    .countdown-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .countdown-card {
+      min-height: 94px;
+      padding: 13px 14px;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      backdrop-filter: blur(var(--surface-blur));
+      border-radius: var(--card-radius);
+      position: relative;
+      overflow: hidden;
+    }
+    .countdown-card::before { content: ""; position: absolute; width: 62px; height: 62px; right: -20px; top: -25px; border-radius: 50%; background: var(--color-primary-soft); filter: blur(2px); }
+    .countdown-name { font-size: 11px; color: var(--color-text-muted); }
+    .countdown-value { display: flex; align-items: baseline; gap: 5px; margin-top: 9px; }
+    .countdown-value strong { font-size: 31px; letter-spacing: -.05em; line-height: 1; }
+    .countdown-value span { font-size: 10px; color: var(--color-text-muted); }
+    .countdown-date { margin-top: 7px; font-size: 9px; color: var(--color-text-muted); }
+
+    .organizer {
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      backdrop-filter: blur(var(--surface-blur));
+      border-radius: var(--card-radius);
+      overflow: hidden;
+    }
+    .organizer-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 13px; cursor: pointer; }
+    .organizer-name { display: flex; align-items: center; gap: 9px; }
+    .folder-mark { width: 28px; height: 28px; border-radius: 10px; background: var(--color-primary-soft); color: var(--color-primary); display: grid; place-items: center; font-size: 14px; }
+    .organizer-name strong { display: block; font-size: 12px; }
+    .organizer-name small { display: block; color: var(--color-text-muted); margin-top: 2px; font-size: 9px; }
+    .chevron { transition: transform var(--duration-normal) var(--ease-out); }
+    .organizer.collapsed .chevron { transform: rotate(-90deg); }
+    .organizer-body { max-height: 246px; opacity: 1; padding: 0 12px 12px; transition: max-height 360ms var(--ease-out), opacity 220ms, padding 360ms; }
+    .organizer.collapsed .organizer-body { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
+    .file-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+    .file-item {
+      min-width: 0; padding: 9px 5px 7px; border: 1px solid var(--card-border);
+      border-radius: 13px; background: var(--file-bg); text-align: center;
+      transition: transform var(--duration-fast), background var(--duration-fast);
+    }
+    .file-item:hover { transform: translateY(-3px); background: var(--color-surface-raised); }
+    .file-icon { width: 30px; height: 34px; margin: 0 auto 6px; border-radius: 8px; background: linear-gradient(145deg, var(--color-primary), var(--color-accent)); display: grid; place-items: end center; padding-bottom: 4px; color: var(--button-fg); font-size: 7px; font-weight: 900; box-shadow: 0 6px 16px var(--color-primary-soft); }
+    .file-item:nth-child(2) .file-icon { background: linear-gradient(145deg, hsl(42 95% 67%), hsl(27 89% 60%)); }
+    .file-item:nth-child(3) .file-icon { background: linear-gradient(145deg, hsl(271 72% 72%), hsl(222 85% 65%)); }
+    .file-item:nth-child(4) .file-icon { background: linear-gradient(145deg, hsl(155 60% 61%), hsl(187 72% 52%)); }
+    .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8px; color: var(--color-text-muted); }
+    .drop-hint { margin-top: 8px; border: 1px dashed color-mix(in hsl, var(--color-primary) 45%, transparent); border-radius: 11px; padding: 7px; text-align: center; color: var(--color-text-muted); font-size: 9px; transition: background 160ms, color 160ms, transform 160ms; }
+    .drop-hint.dragover { background: var(--color-primary-soft); color: var(--color-primary); transform: scale(1.015); }
+
+    .fab {
+      position: absolute;
+      right: 20px; bottom: 20px;
+      width: 54px; height: 54px; border-radius: 18px; border: 0;
+      color: var(--button-fg); background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+      box-shadow: 0 13px 32px var(--color-primary-soft);
+      cursor: pointer; font-size: 26px; line-height: 1;
+      transition: transform var(--duration-normal) var(--ease-spring), border-radius var(--duration-normal);
+      z-index: 8;
+    }
+    .fab:hover { transform: translateY(-3px) rotate(5deg); }
+    .fab.open { transform: rotate(45deg); border-radius: 50%; }
+    .quick-add {
+      position: absolute; left: 18px; right: 18px; bottom: 86px; z-index: 7;
+      padding: 14px; border: 1px solid var(--card-border); border-radius: 20px;
+      background: var(--color-surface-raised); backdrop-filter: blur(22px);
+      box-shadow: 0 18px 50px var(--color-shadow);
+      opacity: 0; transform: translateY(18px) scale(.96); pointer-events: none;
+      transition: 260ms var(--ease-out);
+    }
+    .quick-add.open { opacity: 1; transform: none; pointer-events: auto; }
+    .quick-add-row { display: flex; gap: 8px; }
+    .quick-add input { flex: 1; min-width: 0; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface-soft); color: var(--color-text); padding: 10px 12px; outline: none; }
+    .quick-add input:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+    .save-button { border: 0; border-radius: 12px; background: var(--button-bg); color: var(--button-fg); padding: 0 14px; font-weight: 800; cursor: pointer; }
+    .quick-options { display: flex; gap: 7px; margin-top: 9px; }
+    .quick-option { border: 1px solid var(--color-border); background: var(--color-surface-soft); padding: 6px 9px; border-radius: 9px; color: var(--color-text-muted); font-size: 9px; }
+
+    .toast {
+      position: absolute; left: 50%; bottom: 26px; z-index: 10;
+      transform: translate(-50%, 22px); opacity: 0; pointer-events: none;
+      background: color-mix(in hsl, var(--color-surface-raised) 90%, transparent);
+      border: 1px solid var(--card-border); backdrop-filter: blur(20px);
+      border-radius: 999px; padding: 9px 13px; white-space: nowrap;
+      box-shadow: 0 12px 34px var(--color-shadow); font-size: 10px;
+      transition: 260ms var(--ease-out);
+    }
+    .toast.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+    .toast button { border: 0; background: transparent; color: var(--color-primary); font-weight: 800; margin-left: 8px; cursor: pointer; }
+
+    .burst-particle { position: absolute; width: 7px; height: 5px; border-radius: 70% 30% 70% 30%; background: var(--particle-color, var(--color-success)); pointer-events: none; z-index: 20; animation: burst 720ms var(--ease-out) forwards; }
+    @keyframes burst {
+      from { opacity: 1; transform: translate(0,0) rotate(0) scale(.7); }
+      to { opacity: 0; transform: translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(1.15); }
+    }
+
+    @media (max-width: 850px) {
+      .concept-meta { display: none; }
+      .app-window { transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+      #petals { display: none; }
+    }
+  </style>
+</head>
+<body data-theme="night">
+  <main class="stage">
+    <aside class="concept-meta">
+      <div class="eyebrow">Desktop Concept 01</div>
+      <h1 id="concept-name">夜航流光</h1>
+      <p id="concept-desc">冷静、专注、层级清楚。用微光与低饱和蓝建立效率感，完成反馈采用绿色光波。</p>
+      <div class="theme-switcher" aria-label="视觉方案">
+        <button class="theme-chip active" data-theme-value="night">夜航</button>
+        <button class="theme-chip" data-theme-value="mist">柔雾</button>
+        <button class="theme-chip" data-theme-value="sakura">樱花</button>
+      </div>
+    </aside>
+
+    <section class="app-window" id="app-window" aria-label="桌面待办与倒计时概念窗口">
+      <div class="wallpaper" id="wallpaper"></div>
+      <canvas id="petals"></canvas>
+      <div class="app-content">
+        <header class="titlebar" id="drag-zone">
+          <div class="title-group">
+            <div class="app-mark">序</div>
+            <div class="title-copy"><strong>我的一天</strong><span>8月10日 · 星期一</span></div>
+          </div>
+          <div class="window-actions">
+            <button class="icon-button" id="background-btn" title="上传自定义背景" aria-label="上传自定义背景">▧</button>
+            <button class="icon-button" title="锁定位置" aria-label="锁定位置">⌖</button>
+            <button class="icon-button" title="更多设置" aria-label="更多设置">•••</button>
+          </div>
+        </header>
+
+        <div class="overview">
+          <div><div class="overview-kicker">今天的节奏很好</div><div class="overview-title">已完成 <em id="done-count">2</em> 项</div></div>
+          <div class="progress-ring" id="progress-ring"><span id="progress-text">2/5</span></div>
+        </div>
+
+        <section class="section">
+          <div class="section-header"><div class="section-title"><span class="section-dot"></span><h2>今日待办</h2></div><span class="section-meta">3 项待完成</span></div>
+          <div class="task-list">
+            <article class="task" id="repeat-task">
+              <button class="check" aria-label="完成背单词">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4L19 6"/></svg>
+              </button>
+              <div class="task-copy"><strong>背单词</strong><span>每天重复 · 20:30 提醒</span></div>
+              <span class="task-tag">习惯</span>
+            </article>
+            <article class="task">
+              <button class="check" aria-label="完成电商项目首页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4L19 6"/></svg></button>
+              <div class="task-copy"><strong>完成电商项目首页</strong><span>今天 · 18:00</span></div>
+              <span class="task-tag">工作</span>
+            </article>
+            <article class="task">
+              <button class="check" aria-label="完成雅思听力"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l4 4L19 6"/></svg></button>
+              <div class="task-copy"><strong>雅思听力精听 30 分钟</strong><span>今天 · 无提醒</span></div>
+              <span class="task-tag">学习</span>
+            </article>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-header"><div class="section-title"><span class="section-dot"></span><h2>倒计时</h2></div><span class="section-meta">按日期排序</span></div>
+          <div class="countdown-grid">
+            <article class="countdown-card"><div class="countdown-name">GRE 考试</div><div class="countdown-value"><strong>128</strong><span>天</span></div><div class="countdown-date">2026年12月16日</div></article>
+            <article class="countdown-card"><div class="countdown-name">项目上线</div><div class="countdown-value"><strong>12</strong><span>天</span></div><div class="countdown-date">2026年8月22日</div></article>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-header"><div class="section-title"><span class="section-dot"></span><h2>文件收纳</h2></div><span class="section-meta">虚拟收纳 · 原文件不移动</span></div>
+          <div class="organizer" id="organizer">
+            <div class="organizer-head" id="organizer-toggle">
+              <div class="organizer-name"><div class="folder-mark">▰</div><div><strong>快捷收纳盒</strong><small>4 个项目 · 点击折叠</small></div></div>
+              <span class="chevron">⌄</span>
+            </div>
+            <div class="organizer-body">
+              <div class="file-grid">
+                <div class="file-item"><div class="file-icon">PDF</div><div class="file-name">论文资料.pdf</div></div>
+                <div class="file-item"><div class="file-icon">DIR</div><div class="file-name">项目素材</div></div>
+                <div class="file-item"><div class="file-icon">ZIP</div><div class="file-name">设计备份.zip</div></div>
+                <div class="file-item"><div class="file-icon">PNG</div><div class="file-name">参考图.png</div></div>
+              </div>
+              <div class="drop-hint" id="drop-hint">拖入文件建立快捷引用 · 不移动原文件</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <button class="fab" id="fab" aria-label="添加项目">＋</button>
+      <div class="quick-add" id="quick-add">
+        <div class="quick-add-row"><input id="quick-input" placeholder="写下要完成的事情…" /><button class="save-button" id="save-button">添加</button></div>
+        <div class="quick-options"><span class="quick-option">今天</span><span class="quick-option">不重复</span><span class="quick-option">提醒</span></div>
+      </div>
+      <div class="toast" id="toast"><span id="toast-text">今日已完成，明天继续</span><button id="undo-button">撤销</button></div>
+      <input type="file" id="background-input" accept="image/jpeg,image/png,image/webp" hidden />
+    </section>
+  </main>
+
+  <script>
+    const themes = {
+      night: { name: "夜航流光", eyebrow: "Desktop Concept 01", desc: "冷静、专注、层级清楚。用微光与低饱和蓝建立效率感，完成反馈采用绿色光波。" },
+      mist: { name: "柔雾便签", eyebrow: "Desktop Concept 02", desc: "温暖、松弛但不幼稚。用纸张感、柔和阴影和珊瑚色强调，让长期使用更轻松。" },
+      sakura: { name: "樱花画布", eyebrow: "Desktop Concept 03 · Dynamic", desc: "自定义图片作为窗口背景，玻璃卡片悬浮其上，花瓣持续缓慢飘落；仍保持文字清晰。" }
+    };
+    const body = document.body;
+    const params = new URLSearchParams(location.search);
+    const initialTheme = themes[params.get("theme")] ? params.get("theme") : "night";
+    let currentTheme = initialTheme;
+
+    function setTheme(theme) {
+      currentTheme = theme;
+      body.dataset.theme = theme;
+      document.getElementById("concept-name").textContent = themes[theme].name;
+      document.querySelector(".eyebrow").textContent = themes[theme].eyebrow;
+      document.getElementById("concept-desc").textContent = themes[theme].desc;
+      document.querySelectorAll(".theme-chip").forEach(chip => chip.classList.toggle("active", chip.dataset.themeValue === theme));
+      if (theme !== "sakura") clearPetals(); else seedPetals();
+    }
+    document.querySelectorAll(".theme-chip").forEach(chip => chip.addEventListener("click", () => setTheme(chip.dataset.themeValue)));
+
+    const app = document.getElementById("app-window");
+    let drag = null;
+    document.getElementById("drag-zone").addEventListener("pointerdown", e => {
+      if (e.target.closest("button")) return;
+      drag = { x: e.clientX, y: e.clientY, left: app.offsetLeft, top: app.offsetTop };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    });
+    document.getElementById("drag-zone").addEventListener("pointermove", e => {
+      if (!drag || innerWidth < 850) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      app.style.transform = `translate3d(${110 + dx}px, ${dy}px, 0)`;
+    });
+    document.getElementById("drag-zone").addEventListener("pointerup", () => drag = null);
+
+    let lastCompleted = null;
+    const toast = document.getElementById("toast");
+    let toastTimer;
+    document.querySelectorAll(".check").forEach(button => button.addEventListener("click", () => completeTask(button.closest(".task"))));
+
+    function completeTask(task) {
+      if (task.classList.contains("completing") || task.classList.contains("completed")) return;
+      lastCompleted = task;
+      task.classList.add("completing");
+      burst(task.querySelector(".check"));
+      const count = document.getElementById("done-count");
+      const total = Math.min(5, Number(count.textContent) + 1);
+      setTimeout(() => {
+        count.textContent = total;
+        count.animate([{ transform: "translateY(6px) scale(.7)", opacity: .2 }, { transform: "translateY(-4px) scale(1.3)", opacity: 1 }, { transform: "none" }], { duration: 430, easing: "cubic-bezier(.2,1.4,.3,1)" });
+        document.getElementById("progress-text").textContent = `${total}/5`;
+        document.getElementById("progress-ring").style.background = `conic-gradient(var(--color-primary) 0 ${total * 20}%, var(--color-surface-soft) ${total * 20}% 100%)`;
+      }, 240);
+      setTimeout(() => task.classList.add("completed"), 560);
+      document.getElementById("toast-text").textContent = task.id === "repeat-task" ? "今日已完成，明天继续" : "做得很好，已收入完成记录";
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("show"), 4500);
+    }
+
+    function burst(check) {
+      const appRect = app.getBoundingClientRect();
+      const rect = check.getBoundingClientRect();
+      const originX = rect.left - appRect.left + rect.width / 2;
+      const originY = rect.top - appRect.top + rect.height / 2;
+      for (let i = 0; i < 18; i++) {
+        const particle = document.createElement("i");
+        particle.className = "burst-particle";
+        const angle = (Math.PI * 2 * i / 18) + (Math.random() - .5) * .4;
+        const distance = 30 + Math.random() * 42;
+        particle.style.left = `${originX}px`;
+        particle.style.top = `${originY}px`;
+        particle.style.setProperty("--dx", `${Math.cos(angle) * distance}px`);
+        particle.style.setProperty("--dy", `${Math.sin(angle) * distance}px`);
+        particle.style.setProperty("--rot", `${Math.round(Math.random() * 380 - 190)}deg`);
+        particle.style.setProperty("--particle-color", currentTheme === "sakura" ? "var(--p-pink-300)" : "var(--color-success)");
+        app.appendChild(particle);
+        setTimeout(() => particle.remove(), 760);
+      }
+    }
+
+    document.getElementById("undo-button").addEventListener("click", () => {
+      if (!lastCompleted) return;
+      lastCompleted.classList.remove("completed", "completing");
+      const count = document.getElementById("done-count");
+      const total = Math.max(0, Number(count.textContent) - 1);
+      count.textContent = total;
+      document.getElementById("progress-text").textContent = `${total}/5`;
+      document.getElementById("progress-ring").style.background = `conic-gradient(var(--color-primary) 0 ${total * 20}%, var(--color-surface-soft) ${total * 20}% 100%)`;
+      toast.classList.remove("show");
+      lastCompleted = null;
+    });
+
+    document.getElementById("organizer-toggle").addEventListener("click", () => document.getElementById("organizer").classList.toggle("collapsed"));
+    const dropHint = document.getElementById("drop-hint");
+    ["dragenter", "dragover"].forEach(type => dropHint.addEventListener(type, e => { e.preventDefault(); dropHint.classList.add("dragover"); dropHint.textContent = "松开后建立虚拟引用"; }));
+    ["dragleave", "drop"].forEach(type => dropHint.addEventListener(type, e => { e.preventDefault(); dropHint.classList.remove("dragover"); dropHint.textContent = type === "drop" ? "已加入收纳盒 · 原文件未移动" : "拖入文件建立快捷引用 · 不移动原文件"; }));
+
+    const fab = document.getElementById("fab"), quick = document.getElementById("quick-add");
+    fab.addEventListener("click", () => { fab.classList.toggle("open"); quick.classList.toggle("open"); if (quick.classList.contains("open")) setTimeout(() => document.getElementById("quick-input").focus(), 180); });
+    document.getElementById("save-button").addEventListener("click", () => {
+      const input = document.getElementById("quick-input");
+      if (!input.value.trim()) return input.focus();
+      fab.classList.remove("open"); quick.classList.remove("open"); input.value = "";
+      document.getElementById("toast-text").textContent = "已添加到今日待办";
+      toast.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+    });
+
+    const bgInput = document.getElementById("background-input");
+    document.getElementById("background-btn").addEventListener("click", () => bgInput.click());
+    bgInput.addEventListener("change", () => {
+      const file = bgInput.files?.[0]; if (!file) return;
+      document.getElementById("wallpaper").style.backgroundImage = `url("${URL.createObjectURL(file)}")`;
+      setTheme("sakura");
+    });
+
+    const canvas = document.getElementById("petals");
+    const ctx = canvas.getContext("2d");
+    let petals = [], raf = 0, lastTime = 0;
+    function resizeCanvas() { const dpr = Math.min(devicePixelRatio || 1, 2); canvas.width = app.clientWidth * dpr; canvas.height = app.clientHeight * dpr; canvas.style.width = `${app.clientWidth}px`; canvas.style.height = `${app.clientHeight}px`; ctx.setTransform(dpr,0,0,dpr,0,0); }
+    function seedPetals() { resizeCanvas(); petals = Array.from({ length: 25 }, (_, i) => makePetal(i < 12)); cancelAnimationFrame(raf); lastTime = performance.now(); raf = requestAnimationFrame(drawPetals); }
+    function clearPetals() { cancelAnimationFrame(raf); petals = []; ctx.clearRect(0,0,canvas.width,canvas.height); }
+    function makePetal(randomY = false) { return { x: Math.random() * app.clientWidth, y: randomY ? Math.random() * app.clientHeight : -20, size: 3 + Math.random() * 5, speed: 10 + Math.random() * 18, sway: 15 + Math.random() * 28, phase: Math.random() * Math.PI * 2, rotate: Math.random() * Math.PI, spin: (Math.random() - .5) * 1.2, alpha: .38 + Math.random() * .42 }; }
+    function drawPetals(now) {
+      if (currentTheme !== "sakura") return;
+      const dt = Math.min((now - lastTime) / 1000, .05); lastTime = now;
+      ctx.clearRect(0,0,app.clientWidth,app.clientHeight);
+      petals.forEach((p, i) => {
+        p.y += p.speed * dt; p.phase += dt * .8; p.rotate += p.spin * dt; p.x += Math.sin(p.phase) * dt * p.sway;
+        if (p.y > app.clientHeight + 15 || p.x < -25 || p.x > app.clientWidth + 25) petals[i] = p = makePetal(false);
+        ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rotate); ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = i % 3 ? "#f6b6d1" : "#ffd4e4";
+        ctx.beginPath(); ctx.ellipse(0,0,p.size,p.size*.55,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+      });
+      raf = requestAnimationFrame(drawPetals);
+    }
+    setTheme(initialTheme);
+    addEventListener("resize", () => currentTheme === "sakura" && seedPetals());
+  </script>
+</body>
+</html>

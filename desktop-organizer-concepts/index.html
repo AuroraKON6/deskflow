@@ -1,0 +1,2449 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>桌面效率工具 · 三窗口概念</title>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script>
+    const desktopParams = new URLSearchParams(location.search);
+    window.desktopWidgetMode = desktopParams.get('widget');
+    window.desktopManualSize = desktopParams.get('manual') === '1';
+    if (window.desktopWidgetMode) document.documentElement.dataset.desktopWidget = window.desktopWidgetMode;
+    if (window.desktopManualSize) document.documentElement.classList.add('native-manual-size');
+  </script>
+  <style>
+    /* Primitive tokens */
+    :root {
+      --p-paper-50: #f6f4ee;
+      --p-paper-100: #ebe8df;
+      --p-paper-200: #d7d2c6;
+      --p-paper-300: #c6bfb1;
+      --p-ink-900: #171713;
+      --p-ink-800: #26251f;
+      --p-ink-700: #38362e;
+      --p-coral-500: #e75b37;
+      --p-coral-600: #c94828;
+      --p-red-600: #d92718;
+      --p-red-700: #a9160d;
+      --p-orange-500: #ff671d;
+      --p-yellow-400: #ffd747;
+      --p-green-500: #2f7657;
+      --p-green-100: #d9eadf;
+      --p-white: #ffffff;
+      --p-shadow: rgb(23 23 19 / 16%);
+      --p-transparent: transparent;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --radius-xs: 4px;
+      --radius-sm: 7px;
+      --radius-md: 10px;
+      --duration-fast: 140ms;
+      --duration-normal: 240ms;
+      --duration-slow: 560ms;
+      --ease-out: cubic-bezier(.2, .9, .25, 1);
+      --font-ui: "Microsoft YaHei UI", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    /* Semantic tokens */
+    :root {
+      --color-canvas: var(--p-paper-100);
+      --color-text: var(--p-ink-900);
+      --color-text-muted: var(--p-ink-700);
+      --color-line: var(--p-ink-900);
+      --color-accent: var(--p-coral-500);
+      --color-accent-active: var(--p-coral-600);
+      --color-success: var(--p-green-500);
+      --color-danger: var(--p-red-600);
+      --color-danger-deep: var(--p-red-700);
+      --color-warning: var(--p-yellow-400);
+      --color-focus: var(--p-coral-500);
+      --color-inverse: var(--p-paper-50);
+      --surface-light: var(--p-paper-50);
+      --surface-dark: var(--p-ink-900);
+      --surface-shelf: var(--p-paper-200);
+      --shadow-window: 8px 8px 0 var(--p-ink-900), 0 16px 36px var(--p-shadow);
+      --shadow-dark-window: 8px 8px 0 var(--p-coral-500), 0 16px 36px var(--p-shadow);
+    }
+
+    /* Component tokens */
+    :root {
+      --widget-border: 1.5px solid var(--color-line);
+      --widget-radius: var(--radius-md);
+      --widget-header-height: 54px;
+      --widget-padding: var(--space-4);
+      --icon-button-size: 32px;
+      --task-row-height: 58px;
+      --control-border: 1px solid currentColor;
+      --focus-ring: 0 0 0 3px rgb(231 91 55 / 28%);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--color-text);
+      background-color: var(--color-canvas);
+      background-image:
+        linear-gradient(rgb(23 23 19 / 4%) 1px, transparent 1px),
+        linear-gradient(90deg, rgb(23 23 19 / 4%) 1px, transparent 1px);
+      background-size: 24px 24px;
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
+    }
+
+    .stage {
+      position: relative;
+      min-height: 100vh;
+      isolation: isolate;
+    }
+
+    .stage-label {
+      position: absolute;
+      left: max(24px, calc(50% - 438px));
+      top: 28px;
+      z-index: -1;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      color: var(--color-text-muted);
+      user-select: none;
+    }
+    .stage-label strong {
+      font: 700 11px/1 var(--font-mono);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .stage-label span { font-size: 12px; }
+
+    .widget {
+      position: absolute;
+      border: var(--widget-border);
+      border-radius: var(--widget-radius);
+      overflow: visible;
+      transition: width var(--duration-normal) var(--ease-out), box-shadow var(--duration-normal) var(--ease-out), opacity var(--duration-fast);
+      touch-action: none;
+    }
+    .widget.dragging { opacity: .94; z-index: 20 !important; box-shadow: 13px 13px 0 var(--p-ink-900), 0 24px 50px var(--p-shadow); }
+    .widget.pinned .drag-grip { opacity: .25; }
+    .widget.minimized .widget-body, .widget.minimized > form, .widget.minimized .done-stamp { display: none; }
+    .widget.minimized {
+      --fold-page-1: var(--surface-light);
+      --fold-page-2: var(--p-paper-200);
+      height: var(--widget-header-height);
+      min-height: 0;
+      box-shadow: 4px 4px 0 var(--p-ink-900), 0 12px 26px var(--p-shadow);
+      animation: fold-cover-in 320ms var(--ease-out) both;
+    }
+    .countdown-widget.minimized { --fold-page-1: var(--p-ink-800); --fold-page-2: var(--p-ink-700); box-shadow: 4px 4px 0 var(--color-accent), 0 12px 26px var(--p-shadow); }
+    .files-widget.minimized { --fold-page-1: var(--p-paper-100); --fold-page-2: var(--p-paper-200); }
+    .widget.minimized::before, .widget.minimized::after {
+      content: "";
+      position: absolute;
+      height: 100%;
+      border: var(--widget-border);
+      border-radius: var(--widget-radius);
+      pointer-events: none;
+      transform-origin: top center;
+    }
+    .widget.minimized::before { left: 8px; right: 8px; top: 8px; z-index: -1; background: var(--fold-page-1); animation: fold-page-one 360ms 50ms var(--ease-out) both; }
+    .widget.minimized::after { left: 16px; right: 16px; top: 16px; z-index: -2; background: var(--fold-page-2); animation: fold-page-two 420ms 90ms var(--ease-out) both; }
+    .widget.minimized .widget-header { border-bottom-color: var(--p-transparent); }
+    .widget.minimized .header-copy { display: flex; align-items: center; gap: 10px; }
+    .widget.minimized .header-copy::after { content: "FOLDED"; padding: 3px 5px; border: 1px solid currentColor; border-radius: 2px; opacity: .6; font: 700 7px/1 var(--font-mono); letter-spacing: .08em; }
+    @keyframes fold-cover-in { from { transform: perspective(500px) rotateX(-7deg) translateY(-4px); opacity: .75; } to { transform: none; opacity: 1; } }
+    @keyframes fold-page-one { from { top: 0; transform: scaleX(.94); opacity: 0; } to { top: 8px; transform: none; opacity: 1; } }
+    @keyframes fold-page-two { from { top: 0; transform: scaleX(.9); opacity: 0; } to { top: 16px; transform: none; opacity: 1; } }
+    .widget.compact {
+      --widget-header-height: 44px;
+      --widget-padding: 10px;
+      --icon-button-size: 27px;
+      box-shadow: 5px 5px 0 var(--p-ink-900), 0 10px 22px var(--p-shadow);
+    }
+    .countdown-widget.compact { box-shadow: 5px 5px 0 var(--p-coral-500), 0 10px 22px var(--p-shadow); }
+    .widget.compact .widget-header { gap: 8px; padding-inline: 10px 8px; }
+    .widget.compact .header-copy h1 { font-size: 13px; }
+    .widget.compact .header-copy p, .widget.compact .drag-grip { display: none; }
+    .widget.compact .widget-menu { top: 32px; }
+    .todo-widget.compact { width: 286px; }
+    .todo-widget.compact .summary-date, .todo-widget.compact .progress-track, .todo-widget.compact .task-meta, .todo-widget.compact .task-tag, .todo-widget.compact .task-edit, .todo-widget.compact .todo-footer small { display: none; }
+    .todo-widget.compact .summary-title { font-size: 19px; }
+    .todo-widget.compact .todo-summary { margin-bottom: 4px; }
+    .todo-widget.compact .task { min-height: 39px; padding-block: 4px; }
+    .todo-widget.compact .task-check { width: 20px; height: 20px; }
+    .todo-widget.compact .todo-footer { margin-top: 6px; justify-content: flex-end; }
+    .todo-widget.compact .text-button { height: 30px; }
+    .countdown-widget.compact { width: 240px; }
+    .countdown-widget.compact .clock-line { margin-bottom: 8px; }
+    .countdown-widget.compact .countdown-list { gap: 6px; }
+    .countdown-widget.compact .countdown-item { padding: 9px; }
+    .countdown-widget.compact .countdown-value { margin-top: 5px; }
+    .countdown-widget.compact .countdown-value strong { font-size: 28px; }
+    .countdown-widget.compact .countdown-date span:last-child, .countdown-widget.compact .countdown-rule { display: none; }
+    .countdown-widget.compact .countdown-footer { margin-top: 8px; }
+    .countdown-widget.compact .countdown-footer small { display: none; }
+    .files-widget.compact { width: 302px; }
+    .files-widget.compact .shelf-summary { margin-bottom: 8px; }
+    .files-widget.compact .file-grid { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .files-widget.compact .file-item { min-height: 76px; padding: 7px 5px 6px; }
+    .files-widget.compact .file-name { margin-top: 5px; font-size: 8px; }
+    .files-widget.compact .drop-zone { height: 32px; margin-top: 7px; }
+
+    .todo-widget {
+      left: calc(50% - 408px);
+      top: 92px;
+      width: 368px;
+      z-index: 3;
+      background: var(--surface-light);
+      box-shadow: var(--shadow-window);
+    }
+    .countdown-widget {
+      left: calc(50% + 34px);
+      top: 104px;
+      width: 304px;
+      z-index: 2;
+      color: var(--color-inverse);
+      background: var(--surface-dark);
+      box-shadow: var(--shadow-dark-window);
+    }
+    .files-widget {
+      left: calc(50% - 8px);
+      top: 520px;
+      width: 430px;
+      z-index: 1;
+      background: var(--surface-shelf);
+      box-shadow: var(--shadow-window);
+    }
+
+    .widget-header {
+      height: var(--widget-header-height);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0 var(--space-3) 0 var(--space-4);
+      border-bottom: 1px solid currentColor;
+      cursor: grab;
+      user-select: none;
+    }
+    .widget.dragging .widget-header { cursor: grabbing; }
+    .widget.minimized .widget-header { border-bottom-color: var(--p-transparent); }
+    .header-copy { min-width: 0; flex: 1; }
+    .header-copy h1 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      letter-spacing: -.02em;
+    }
+    .header-copy p {
+      margin: 3px 0 0;
+      color: var(--color-text-muted);
+      font: 500 9px/1 var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .countdown-widget .header-copy p { color: var(--p-paper-300); }
+
+    .drag-grip {
+      width: 14px;
+      height: 18px;
+      flex: 0 0 auto;
+      opacity: .62;
+      background-image: radial-gradient(circle, currentColor 1.2px, transparent 1.3px);
+      background-size: 6px 6px;
+    }
+    .header-actions { position: relative; display: flex; gap: 5px; }
+    .icon-button {
+      width: var(--icon-button-size);
+      height: var(--icon-button-size);
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: var(--control-border);
+      border-radius: var(--radius-xs);
+      background: var(--p-transparent);
+      cursor: pointer;
+      transition: transform var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
+    }
+    .icon-button:hover { background: currentColor; color: var(--surface-light); }
+    .countdown-widget .icon-button:hover { color: var(--surface-dark); background: var(--color-inverse); }
+    .icon-button:active { transform: translateY(1px); }
+    .icon-button.active { background: var(--color-accent); color: var(--p-white); border-color: var(--color-accent); }
+    .icon-button svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    .widget-menu {
+      position: absolute;
+      right: 0;
+      top: 38px;
+      z-index: 30;
+      width: 168px;
+      padding: 5px;
+      border: var(--widget-border);
+      border-radius: var(--radius-sm);
+      color: var(--color-text);
+      background: var(--surface-light);
+      box-shadow: 4px 4px 0 var(--p-ink-900);
+      opacity: 0;
+      transform: translateY(-5px);
+      pointer-events: none;
+      transition: opacity var(--duration-fast), transform var(--duration-fast);
+    }
+    .widget-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+    .widget-menu button {
+      width: 100%;
+      height: 32px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: var(--radius-xs);
+      text-align: left;
+      color: var(--color-text);
+      background: var(--p-transparent);
+      cursor: pointer;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .widget-menu button:hover { color: var(--color-inverse); background: var(--p-ink-900); }
+
+    .widget-body { padding: var(--widget-padding); }
+
+    /* Todo */
+    .todo-summary {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+    .summary-date { font: 600 10px/1 var(--font-mono); letter-spacing: .06em; color: var(--color-text-muted); }
+    .summary-title { margin-top: 7px; font-size: 25px; line-height: 1; font-weight: 800; letter-spacing: -.065em; }
+    .summary-title em { color: var(--color-accent); font-style: normal; }
+    .progress-copy { display: flex; align-items: baseline; justify-content: flex-end; gap: 4px; white-space: nowrap; color: var(--color-text-muted); font-size: 9px; }
+    .progress-copy strong { color: var(--color-text); font: 800 18px/1 var(--font-mono); letter-spacing: -.06em; }
+    .progress-track { height: 3px; margin: 10px 0 3px; overflow: hidden; background: var(--p-paper-200); }
+    .progress-fill { width: 40%; height: 100%; background: var(--color-accent); transition: width 420ms var(--ease-out); }
+
+    .task-list { border-top: 1px solid var(--color-line); }
+    .task {
+      position: relative;
+      min-height: var(--task-row-height);
+      display: grid;
+      grid-template-columns: 25px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+      border-bottom: 1px solid rgb(23 23 19 / 24%);
+      transition: min-height var(--duration-slow) var(--ease-out), opacity var(--duration-normal), transform var(--duration-normal), padding var(--duration-slow);
+    }
+    .task::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      z-index: 6;
+      height: 2px;
+      background: var(--color-success);
+      transform: scaleX(0);
+      transform-origin: left center;
+      pointer-events: none;
+      transition: transform 430ms var(--ease-out);
+    }
+    .task-check {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 1.5px solid var(--color-line);
+      border-radius: 50%;
+      background: var(--p-transparent);
+      cursor: pointer;
+      transition: background var(--duration-fast), transform var(--duration-normal) var(--ease-out);
+    }
+    .task-check:hover { transform: scale(1.08); background: var(--p-green-100); }
+    .task-check svg { width: 13px; height: 13px; stroke: var(--p-white); fill: none; stroke-width: 2.4; stroke-dasharray: 18; stroke-dashoffset: 18; transition: stroke-dashoffset 260ms 80ms; }
+    .task-copy strong { display: block; font-size: 13px; line-height: 1.25; }
+    .task-copy small { display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 9px; }
+    .task-kind { font: 700 8px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .task-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; }
+    .task-edit {
+      width: 27px;
+      height: 27px;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-xs);
+      color: var(--color-text);
+      background: var(--p-transparent);
+      cursor: pointer;
+      transition: color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast);
+    }
+    .task-edit:hover { color: var(--color-inverse); background: var(--p-ink-900); transform: translateY(-1px); }
+    .task-edit svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .task.completing .task-check { background: var(--color-success); border-color: var(--color-success); transform: scale(1.12); }
+    .task.completing .task-check svg { stroke-dashoffset: 0; }
+    .task.completing::after { transform: scaleX(1); }
+    .task.completing .task-copy, .task.completing .task-kind { opacity: .58; transition: opacity 180ms; }
+    .task.completing .task-edit { opacity: 0; pointer-events: none; }
+    .task.completed { min-height: 0; height: 0; opacity: 0; transform: translateX(25px); border-width: 0; }
+    .task.reminding {
+      z-index: 7;
+      border-color: var(--color-danger);
+      background: repeating-linear-gradient(135deg, rgb(255 215 71 / 48%) 0 8px, rgb(246 244 238 / 94%) 8px 16px);
+      box-shadow: inset 4px 0 0 var(--color-danger), 0 0 0 3px rgb(217 39 24 / 18%);
+      animation: task-reminder-pulse 720ms steps(2, end) infinite;
+    }
+    .task.reminding .task-copy small { color: var(--color-danger-deep); font-weight: 700; }
+    @keyframes task-reminder-pulse { 50% { box-shadow: inset 7px 0 0 var(--color-danger), 0 0 0 6px rgb(217 39 24 / 28%); } }
+
+    .done-stamp {
+      position: absolute;
+      right: 39px;
+      top: 6px;
+      z-index: 8;
+      padding: 4px 7px 3px;
+      border: 2px solid var(--color-success);
+      color: var(--color-success);
+      background: var(--surface-light);
+      font: 900 10px/1 var(--font-mono);
+      letter-spacing: .12em;
+      transform: rotate(-9deg) scale(2.2);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .done-stamp.show { animation: stamp-in 740ms var(--ease-out) both; }
+    @keyframes stamp-in {
+      0% { opacity: 0; transform: rotate(-9deg) scale(2.2); }
+      34% { opacity: 1; transform: rotate(-9deg) scale(.92); }
+      52% { transform: rotate(-9deg) scale(1.05); }
+      82% { opacity: 1; }
+      100% { opacity: 0; transform: rotate(-9deg) scale(.96); }
+    }
+
+    .todo-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 13px; }
+    .text-button {
+      height: 32px;
+      padding: 0 11px;
+      border: var(--control-border);
+      border-radius: var(--radius-xs);
+      color: var(--color-inverse);
+      background: var(--p-ink-900);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .text-button:hover { background: var(--color-accent); border-color: var(--color-accent); }
+    .todo-footer small { color: var(--color-text-muted); font-size: 9px; }
+    .todo-widget { transition: min-height 360ms var(--ease-out), box-shadow var(--duration-normal) var(--ease-out), opacity var(--duration-fast); }
+    .todo-widget > .widget-body { transition: opacity 180ms, transform 320ms var(--ease-out); }
+    .todo-widget.editing { min-height: 558px; }
+    .todo-widget.editing > .widget-body { opacity: 0; transform: translateX(-34px); pointer-events: none; }
+    .task-editor {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: var(--widget-header-height);
+      min-height: 502px;
+      padding: var(--space-4);
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      color: var(--color-text);
+      background: var(--surface-light);
+      opacity: 0;
+      transform: translateX(38px);
+      pointer-events: none;
+      transition: opacity 180ms, transform 340ms var(--ease-out);
+    }
+    .todo-widget.editing .task-editor { opacity: 1; transform: none; pointer-events: auto; }
+    .editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .editor-kicker { color: var(--color-accent); font: 800 9px/1 var(--font-mono); letter-spacing: .12em; }
+    .editor-head h2 { margin: 6px 0 0; font-size: 22px; line-height: 1; letter-spacing: -.055em; }
+    .back-button {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: var(--control-border);
+      border-radius: var(--radius-xs);
+      background: var(--p-transparent);
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .back-button:hover { color: var(--color-inverse); background: var(--p-ink-900); }
+    .field { display: block; margin-bottom: 13px; }
+    .field-label { display: block; margin-bottom: 6px; color: var(--color-text-muted); font: 700 9px/1 var(--font-mono); letter-spacing: .05em; text-transform: uppercase; }
+    .field input, .field select {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      border: var(--widget-border);
+      border-radius: var(--radius-xs);
+      color: var(--color-text);
+      background: var(--p-white);
+      font-size: 11px;
+    }
+    .field input:hover, .field select:hover { border-color: var(--color-accent); }
+    .date-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .weekday-field { display: none; margin: -2px 0 13px; }
+    .weekday-field.show { display: block; }
+    .weekday-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .weekday-row label { position: relative; cursor: pointer; }
+    .weekday-row input { position: absolute; opacity: 0; pointer-events: none; }
+    .weekday-row span {
+      height: 29px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--color-line);
+      border-radius: var(--radius-xs);
+      background: var(--p-transparent);
+      font-size: 9px;
+    }
+    .weekday-row input:checked + span { color: var(--color-inverse); background: var(--p-ink-900); }
+    .reminder-row { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+    .switch-control { display: flex; align-items: center; gap: 7px; font-size: 10px; cursor: pointer; }
+    .switch-control input { width: 15px; height: 15px; accent-color: var(--color-accent); }
+    .reminder-row input[type="time"]:disabled { opacity: .42; cursor: not-allowed; }
+    .editor-error { min-height: 16px; margin: 0 0 5px; color: var(--color-accent-active); font-size: 9px; }
+    .editor-actions { display: grid; grid-template-columns: 1fr 1.45fr; gap: 8px; }
+    .secondary-button, .primary-button {
+      height: 38px;
+      border: var(--control-border);
+      border-radius: var(--radius-xs);
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .secondary-button { color: var(--color-text); background: var(--p-transparent); }
+    .secondary-button:hover { background: var(--p-paper-200); }
+    .primary-button { color: var(--color-inverse); background: var(--p-ink-900); }
+    .primary-button:hover { background: var(--color-accent); border-color: var(--color-accent); }
+
+    /* Countdown */
+    .countdown-widget { transition: min-height 360ms var(--ease-out), box-shadow var(--duration-normal) var(--ease-out), opacity var(--duration-fast); }
+    .countdown-widget > .widget-body { transition: opacity 180ms, transform 320ms var(--ease-out); }
+    .countdown-widget.editing { min-height: 444px; }
+    .countdown-widget.editing > .widget-body { opacity: 0; transform: translateX(-32px); pointer-events: none; }
+    .clock-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; color: var(--p-paper-300); font: 600 9px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+    .live-time { color: var(--color-accent); }
+    .countdown-list { display: grid; gap: 10px; }
+    .countdown-item {
+      position: relative;
+      isolation: isolate;
+      overflow: hidden;
+      padding: 13px 12px 12px;
+      border: 1px solid rgb(246 244 238 / 34%);
+      border-radius: var(--radius-xs);
+      color: var(--color-inverse);
+      background: var(--surface-dark);
+      transition: background var(--duration-fast), border-color var(--duration-fast), box-shadow var(--duration-fast);
+    }
+    .countdown-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .countdown-name { font-size: 12px; font-weight: 700; }
+    .countdown-actions { position: relative; z-index: 12; display: flex; align-items: center; gap: 6px; }
+    .countdown-status { padding: 3px 5px; border: 1px solid currentColor; border-radius: 2px; color: var(--p-paper-300); font: 700 7px/1 var(--font-mono); letter-spacing: .08em; }
+    .countdown-delete {
+      position: relative;
+      z-index: 13;
+      display: grid;
+      place-items: center;
+      width: 25px;
+      height: 25px;
+      padding: 0;
+      border: 1px solid rgb(246 244 238 / 52%);
+      border-radius: 3px;
+      color: var(--p-paper-300);
+      background: rgb(0 0 0 / 20%);
+      cursor: pointer;
+      transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast), transform var(--duration-fast);
+    }
+    .countdown-delete svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+    .countdown-delete:hover, .countdown-delete:focus-visible { color: var(--p-white); background: var(--color-danger); border-color: var(--color-danger); transform: translateY(-1px) rotate(3deg); }
+    .countdown-ack {
+      display: none;
+      height: 25px;
+      padding: 0 7px;
+      border: 1px solid var(--color-warning);
+      border-radius: 3px;
+      color: var(--surface-dark);
+      background: var(--color-warning);
+      cursor: pointer;
+      font: 800 8px/1 var(--font-ui);
+      white-space: nowrap;
+      transition: color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast);
+    }
+    .countdown-item.urgent .countdown-ack { display: block; }
+    .countdown-item.urgent .countdown-ack:hover, .countdown-item.urgent .countdown-ack:focus-visible { transform: translateY(-1px); color: var(--p-white); background: var(--color-danger); border-color: var(--color-danger); }
+    .countdown-item.urgent.acknowledged .countdown-ack { color: var(--color-warning); background: var(--p-transparent); cursor: default; }
+    .countdown-item.urgent.acknowledged .countdown-ack:hover { transform: none; color: var(--color-warning); background: var(--p-transparent); border-color: var(--color-warning); }
+    .countdown-value { display: flex; align-items: baseline; margin-top: 8px; }
+    .countdown-value strong { font: 800 43px/.9 var(--font-mono); letter-spacing: -.09em; }
+    .countdown-value span { margin-left: 8px; color: var(--p-paper-300); font-size: 11px; }
+    .countdown-date { display: flex; justify-content: space-between; margin-top: 8px; color: var(--p-paper-300); font-size: 9px; }
+    .countdown-rule { width: 56px; height: 3px; margin-top: 10px; background: var(--color-accent); transition: width 280ms var(--ease-out), background var(--duration-fast); }
+    .countdown-item.urgent { z-index: 3; border-color: var(--color-warning); box-shadow: 0 0 0 2px rgb(255 215 71 / 17%), 5px 5px 0 rgb(255 215 71 / 38%); animation: urgent-shake 360ms steps(2, end) infinite; }
+    .countdown-item.urgent .countdown-status { color: var(--color-warning); animation: urgent-flash 620ms steps(2, end) infinite; }
+    .countdown-item.urgent .countdown-rule { width: 100%; background: var(--color-warning); animation: urgent-flash 620ms steps(2, end) infinite; }
+    .countdown-item.urgent:not(.acknowledged) { cursor: pointer; }
+    .countdown-item.urgent.acknowledged { animation: none; }
+    .countdown-item.urgent.acknowledged .countdown-status, .countdown-item.urgent.acknowledged .countdown-rule { animation: none; }
+    .countdown-item.overdue {
+      z-index: 4;
+      border: 2px solid var(--color-warning);
+      color: var(--p-white);
+      background:
+        repeating-linear-gradient(135deg, rgb(255 255 255 / 10%) 0 7px, transparent 7px 14px),
+        var(--color-danger);
+      box-shadow: 0 0 0 4px var(--color-danger-deep), 8px 8px 0 var(--color-warning), 0 0 30px rgb(217 39 24 / 64%);
+      animation: overdue-impact 620ms var(--ease-out) both, overdue-pulse 760ms 620ms steps(2, end) infinite;
+    }
+    .countdown-item.overdue::before {
+      content: "!!!";
+      position: absolute;
+      right: -9px;
+      bottom: -24px;
+      z-index: -1;
+      color: rgb(255 215 71 / 28%);
+      font: 900 92px/.8 var(--font-mono);
+      transform: rotate(-12deg);
+    }
+    .countdown-item.overdue .countdown-status { color: var(--color-warning); background: var(--color-danger-deep); animation: urgent-flash 420ms steps(2, end) infinite; }
+    .countdown-item.overdue .countdown-delete { color: var(--p-white); background: var(--color-danger-deep); border-color: var(--p-white); }
+    .countdown-item.overdue .countdown-delete:hover, .countdown-item.overdue .countdown-delete:focus-visible { color: var(--color-danger-deep); background: var(--color-warning); border-color: var(--color-warning); }
+    .countdown-item.overdue .countdown-value span, .countdown-item.overdue .countdown-date { color: var(--p-white); }
+    .countdown-item.overdue .countdown-rule { width: 100%; background: var(--color-warning); }
+    .countdown-item.removing { pointer-events: none; animation: countdown-remove 240ms var(--ease-out) both !important; }
+    @keyframes countdown-remove { to { opacity: 0; transform: translateX(34px) scale(.94); } }
+    .countdown-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+    .countdown-footer small { color: var(--p-paper-300); font-size: 8px; }
+    .countdown-add-button { color: var(--surface-dark); background: var(--color-warning); border-color: var(--color-warning); }
+    .countdown-add-button:hover { color: var(--p-white); background: var(--color-danger); border-color: var(--color-danger); }
+    .countdown-editor {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: var(--widget-header-height);
+      min-height: 388px;
+      padding: var(--space-4);
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      color: var(--color-inverse);
+      background: var(--surface-dark);
+      opacity: 0;
+      transform: translateX(36px);
+      pointer-events: none;
+      transition: opacity 180ms, transform 340ms var(--ease-out);
+    }
+    .countdown-widget.editing .countdown-editor { opacity: 1; transform: none; pointer-events: auto; }
+    .countdown-editor .editor-kicker { color: var(--color-warning); }
+    .countdown-editor .field-label { color: var(--p-paper-300); }
+    .countdown-editor .back-button { color: var(--color-inverse); border-color: var(--color-inverse); }
+    .countdown-editor .back-button:hover { color: var(--surface-dark); background: var(--color-warning); border-color: var(--color-warning); }
+    .countdown-editor .secondary-button { color: var(--color-inverse); border-color: var(--color-inverse); }
+    .countdown-editor .secondary-button:hover { color: var(--surface-dark); background: var(--p-paper-100); }
+    .countdown-editor .primary-button { color: var(--surface-dark); background: var(--color-warning); border-color: var(--color-warning); }
+    .countdown-editor .primary-button:hover { color: var(--p-white); background: var(--color-danger); border-color: var(--color-danger); }
+    .countdown-editor .editor-error { color: var(--color-warning); }
+    @keyframes urgent-shake {
+      0%, 100% { transform: translateX(0) rotate(0); }
+      25% { transform: translateX(-2px) rotate(-.25deg); }
+      50% { transform: translateX(2px) rotate(.25deg); }
+      75% { transform: translateX(-1px) rotate(-.15deg); }
+    }
+    @keyframes urgent-flash { 50% { opacity: .28; } }
+    @keyframes overdue-impact {
+      0% { transform: scale(.72) rotate(-3deg); filter: brightness(2.4); }
+      42% { transform: scale(1.08) rotate(1.5deg); }
+      68% { transform: scale(.97) rotate(-.5deg); }
+      100% { transform: scale(1) rotate(0); filter: none; }
+    }
+    @keyframes overdue-pulse {
+      0%, 100% { box-shadow: 0 0 0 4px var(--color-danger-deep), 8px 8px 0 var(--color-warning), 0 0 24px rgb(217 39 24 / 52%); }
+      50% { box-shadow: 0 0 0 7px var(--color-danger-deep), 12px 12px 0 var(--color-warning), 0 0 48px rgb(217 39 24 / 88%); }
+    }
+
+    /* Files */
+    .shelf-summary { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+    .shelf-summary strong { font-size: 13px; }
+    .shelf-summary span { color: var(--color-text-muted); font: 600 9px/1 var(--font-mono); }
+    .file-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .file-item {
+      position: relative;
+      min-width: 0;
+      min-height: 92px;
+      padding: 9px 7px 8px;
+      border: 1px solid rgb(23 23 19 / 42%);
+      border-radius: var(--radius-xs);
+      text-align: left;
+      color: var(--color-text);
+      background: rgb(246 244 238 / 42%);
+      cursor: pointer;
+      transition: background var(--duration-fast), transform var(--duration-fast), box-shadow var(--duration-fast);
+    }
+    .file-item:hover { background: var(--surface-light); transform: translateY(-2px); box-shadow: 3px 3px 0 var(--p-ink-900); }
+    .file-item.selected { background: var(--surface-light); box-shadow: inset 0 0 0 2px var(--color-accent), 3px 3px 0 var(--p-ink-900); }
+    .file-item.removing { pointer-events: none; animation: file-remove 220ms var(--ease-out) both; }
+    .file-actions { position: absolute; top: 5px; right: 5px; z-index: 3; display: flex; gap: 3px; }
+    .file-action {
+      display: grid;
+      place-items: center;
+      width: 21px;
+      height: 21px;
+      padding: 0;
+      border: 1px solid var(--color-line);
+      border-radius: 3px;
+      color: var(--color-text);
+      background: var(--surface-light);
+      cursor: pointer;
+      opacity: .78;
+      transition: opacity var(--duration-fast), color var(--duration-fast), background var(--duration-fast), transform var(--duration-fast);
+    }
+    .file-action svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .file-action:hover, .file-action:focus-visible { opacity: 1; color: var(--color-inverse); background: var(--p-ink-900); transform: translateY(-1px); }
+    .file-delete:hover, .file-delete:focus-visible { color: var(--p-white); background: var(--color-danger); border-color: var(--color-danger); }
+    .file-copy.unlinked { border-style: dashed; opacity: .38; }
+    .file-copy.unlinked:hover, .file-copy.unlinked:focus-visible { color: var(--color-text); background: var(--surface-light); transform: none; }
+    .file-type { width: 29px; height: 35px; display: grid; place-items: end center; padding-bottom: 5px; border: 1px solid var(--color-line); background: var(--surface-light); font: 800 7px/1 var(--font-mono); }
+    .file-name { margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+    @keyframes file-remove { to { opacity: 0; transform: scale(.84) rotate(-3deg); } }
+    .drop-zone {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+      border: 1px dashed var(--color-line);
+      border-radius: var(--radius-xs);
+      color: var(--color-text-muted);
+      background: var(--p-transparent);
+      cursor: pointer;
+      font-size: 10px;
+      transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
+    }
+    .drop-zone:hover, .drop-zone.dragover { color: var(--color-inverse); background: var(--p-ink-900); border-color: var(--p-ink-900); }
+
+    /* Feedback */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 26px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      padding: 0 8px 0 14px;
+      border: var(--widget-border);
+      border-radius: var(--radius-xs);
+      color: var(--color-inverse);
+      background: var(--p-ink-900);
+      box-shadow: 5px 5px 0 var(--color-accent);
+      font-size: 11px;
+      opacity: 0;
+      transform: translate(-50%, 12px);
+      pointer-events: none;
+      transition: opacity var(--duration-fast), transform var(--duration-normal) var(--ease-out);
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    .toast button { height: 28px; border: 0; color: var(--color-text); background: var(--p-paper-50); cursor: pointer; font-size: 10px; font-weight: 800; }
+    .reminder-alert {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 130;
+      width: min(352px, calc(100vw - 32px));
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      align-items: center;
+      gap: 11px;
+      padding: 12px;
+      border: 2px solid var(--color-line);
+      border-radius: var(--radius-sm);
+      color: var(--color-text);
+      background: var(--color-warning);
+      box-shadow: 8px 8px 0 var(--color-danger), 0 18px 38px var(--p-shadow);
+      opacity: 0;
+      transform: translateY(24px) scale(.94);
+      pointer-events: none;
+      transition: opacity var(--duration-fast), transform var(--duration-normal) var(--ease-out);
+    }
+    .reminder-alert.show { opacity: 1; transform: none; pointer-events: auto; }
+    .reminder-bell { display: grid; place-items: center; width: 42px; height: 42px; border: 2px solid currentColor; border-radius: 50%; background: var(--surface-light); font: 900 24px/1 var(--font-mono); animation: reminder-bell 540ms steps(2, end) infinite; }
+    .reminder-copy { min-width: 0; }
+    .reminder-copy strong, .reminder-copy span { display: block; }
+    .reminder-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+    .reminder-copy span { margin-top: 4px; color: var(--color-text-muted); font-size: 9px; }
+    .reminder-dismiss { height: 32px; padding: 0 10px; border: 1px solid var(--color-line); border-radius: var(--radius-xs); color: var(--color-inverse); background: var(--p-ink-900); cursor: pointer; font-size: 10px; font-weight: 800; }
+    .reminder-dismiss:hover { background: var(--color-danger); border-color: var(--color-danger); }
+    @keyframes reminder-bell { 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
+
+    /* Startup launcher */
+    .launcher-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 220;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgb(23 23 19 / 62%);
+      backdrop-filter: blur(7px);
+      opacity: 1;
+      transition: opacity var(--duration-normal);
+    }
+    .launcher-overlay.closed { opacity: 0; pointer-events: none; }
+    .launcher-panel {
+      width: min(520px, 100%);
+      overflow: hidden;
+      border: 2px solid var(--color-line);
+      border-radius: var(--radius-md);
+      color: var(--color-text);
+      background: var(--surface-light);
+      box-shadow: 12px 12px 0 var(--color-accent), 0 28px 70px rgb(0 0 0 / 35%);
+      transform: translateY(0) scale(1);
+      transition: transform var(--duration-normal) var(--ease-out);
+    }
+    .launcher-overlay.closed .launcher-panel { transform: translateY(18px) scale(.96); }
+    .launcher-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 22px 18px; border-bottom: 1px solid var(--color-line); }
+    .launcher-kicker { color: var(--color-accent); font: 800 9px/1 var(--font-mono); letter-spacing: .14em; }
+    .launcher-head h2 { margin: 8px 0 5px; font-size: 27px; line-height: 1; letter-spacing: -.055em; }
+    .launcher-head p { margin: 0; color: var(--color-text-muted); font-size: 10px; }
+    .master-switch { flex: 0 0 auto; display: grid; justify-items: end; gap: 7px; cursor: pointer; font: 800 9px/1 var(--font-mono); }
+    .master-switch input, .module-choice input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch-track { position: relative; width: 45px; height: 24px; border: 1.5px solid var(--color-line); border-radius: 20px; background: var(--p-paper-200); transition: background var(--duration-fast); }
+    .switch-track::after { content: ""; position: absolute; left: 3px; top: 3px; width: 15px; height: 15px; border: 1px solid var(--color-line); border-radius: 50%; background: var(--surface-light); transition: transform var(--duration-normal) var(--ease-out); }
+    .master-switch input:checked + .switch-track, .module-choice input:checked + .module-card .module-toggle { background: var(--color-accent); }
+    .master-switch input:checked + .switch-track::after { transform: translateX(20px); }
+    .master-switch input:indeterminate + .switch-track { background: var(--color-warning); }
+    .master-switch input:indeterminate + .switch-track::after { transform: translateX(10px); }
+    .module-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 18px 22px; }
+    .module-choice { min-width: 0; cursor: pointer; }
+    .module-card { min-height: 132px; display: grid; grid-template-rows: auto 1fr auto; gap: 10px; padding: 13px; border: 1.5px solid var(--color-line); border-radius: var(--radius-sm); background: var(--p-paper-100); transition: transform var(--duration-fast), color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast); }
+    .module-choice:hover .module-card { transform: translateY(-2px); box-shadow: 4px 4px 0 var(--p-ink-900); }
+    .module-choice input:checked + .module-card { color: var(--color-inverse); background: var(--p-ink-900); box-shadow: 4px 4px 0 var(--color-accent); }
+    .module-icon { display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid currentColor; border-radius: var(--radius-xs); font: 900 11px/1 var(--font-mono); }
+    .module-card strong { display: block; font-size: 13px; }
+    .module-card small { display: block; margin-top: 5px; opacity: .68; font-size: 8px; line-height: 1.35; }
+    .module-toggle { position: relative; width: 31px; height: 17px; border: 1px solid currentColor; border-radius: 20px; background: var(--p-paper-300); }
+    .module-toggle::after { content: ""; position: absolute; left: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: currentColor; transition: transform var(--duration-normal) var(--ease-out); }
+    .module-choice input:checked + .module-card .module-toggle::after { transform: translateX(14px); }
+    .launcher-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px 18px; border-top: 1px solid rgb(23 23 19 / 22%); }
+    .launcher-foot-copy { display: grid; gap: 7px; }
+    .launcher-foot small { color: var(--color-text-muted); font-size: 9px; }
+    .autostart-option { display: flex; align-items: center; gap: 7px; width: max-content; cursor: pointer; font-size: 10px; font-weight: 700; }
+    .autostart-option input { width: 15px; height: 15px; accent-color: var(--color-accent); }
+    .launcher-start { height: 38px; padding: 0 18px; border: 1px solid var(--color-line); border-radius: var(--radius-xs); color: var(--color-inverse); background: var(--p-ink-900); cursor: pointer; font-size: 12px; font-weight: 800; }
+    .launcher-start:hover { background: var(--color-accent); border-color: var(--color-accent); }
+    .launcher-reopen { position: fixed; right: 22px; top: 22px; z-index: 110; height: 32px; padding: 0 11px; border: 1px solid var(--color-line); border-radius: var(--radius-xs); color: var(--color-text); background: var(--surface-light); box-shadow: 3px 3px 0 var(--p-ink-900); cursor: pointer; font: 800 9px/1 var(--font-mono); }
+    .launcher-reopen:hover { color: var(--color-inverse); background: var(--color-accent); border-color: var(--color-accent); }
+    .widget.module-off { display: none !important; }
+
+    /* Native desktop widget mode: one transparent OS window per module. */
+    html[data-desktop-widget],
+    html[data-desktop-widget] body {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      background: transparent !important;
+    }
+    html[data-desktop-widget] .stage {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      isolation: auto;
+    }
+    html[data-desktop-widget] .stage-label,
+    html[data-desktop-widget] .launcher-overlay,
+    html[data-desktop-widget] .launcher-reopen,
+    html[data-desktop-widget] .widget { display: none !important; }
+    html[data-desktop-widget="todo"] .todo-widget,
+    html[data-desktop-widget="countdown"] .countdown-widget,
+    html[data-desktop-widget="files"] .files-widget {
+      display: block !important;
+      position: absolute;
+      left: 4px !important;
+      top: 4px !important;
+      margin: 0;
+      z-index: 1 !important;
+      touch-action: auto;
+    }
+    html[data-desktop-widget="todo"] .todo-widget { width: 368px; }
+    html[data-desktop-widget="countdown"] .countdown-widget { width: 304px; }
+    html[data-desktop-widget="files"] .files-widget { width: 430px; }
+    html[data-desktop-widget="todo"] .todo-widget.compact { width: 286px; }
+    html[data-desktop-widget="countdown"] .countdown-widget.compact { width: 240px; }
+    html[data-desktop-widget="files"] .files-widget.compact { width: 302px; }
+    html[data-desktop-widget] .widget.dragging { opacity: 1; }
+    html[data-desktop-widget] .widget-header { cursor: grab; }
+    html[data-desktop-widget] .widget-header:active { cursor: grabbing; }
+    html[data-desktop-widget] .widget.pinned .drag-grip { opacity: .62; }
+    html.native-manual-size[data-desktop-widget] .widget:not(.module-off) {
+      width: calc(100vw - 19px) !important;
+      height: calc(100vh - 19px) !important;
+      display: flex !important;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    html.native-manual-size[data-desktop-widget] .widget-header { flex: 0 0 var(--widget-header-height); }
+    html.native-manual-size[data-desktop-widget] .widget-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+    html.native-resize-ew, html.native-resize-ew * { cursor: ew-resize !important; }
+    html.native-resize-ns, html.native-resize-ns * { cursor: ns-resize !important; }
+    html.native-resize-nwse, html.native-resize-nwse * { cursor: nwse-resize !important; }
+    html.native-resize-nesw, html.native-resize-nesw * { cursor: nesw-resize !important; }
+    @media (max-width: 620px) { .module-options { grid-template-columns: 1fr; } .module-card { min-height: 86px; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; align-items: center; } .launcher-head h2 { font-size: 23px; } }
+    .particle { position: fixed; z-index: 90; width: 6px; height: 6px; background: var(--color-success); pointer-events: none; animation: particle-out 700ms var(--ease-out) forwards; }
+    @keyframes particle-out { to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); } }
+    .deadline-particle { position: fixed; z-index: 140; width: var(--size); height: calc(var(--size) * 1.8); background: var(--blast-color); clip-path: polygon(50% 0, 100% 100%, 50% 78%, 0 100%); pointer-events: none; animation: deadline-particle-out 980ms var(--ease-out) forwards; }
+    .deadline-shockwave { position: fixed; z-index: 130; width: 22px; height: 22px; border: 5px solid var(--color-warning); border-radius: 50%; transform: translate(-50%, -50%) scale(.1); pointer-events: none; animation: deadline-shockwave-out 760ms var(--ease-out) forwards; }
+    @keyframes deadline-particle-out { to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(.25); } }
+    @keyframes deadline-shockwave-out { to { opacity: 0; transform: translate(-50%, -50%) scale(12); border-width: 1px; } }
+
+    @media (max-width: 780px) {
+      .stage { display: grid; gap: 26px; padding: 74px 18px 60px; }
+      .stage-label { left: 20px; top: 24px; }
+      .widget { position: relative; left: auto; top: auto; width: min(100%, 430px); margin: 0 auto; }
+      .todo-widget, .countdown-widget, .files-widget { left: auto; top: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage" id="stage">
+    <div class="stage-label"><strong>DESK / 02</strong><span>三个窗口 · 拖动标题栏自由摆放</span></div>
+
+    <section class="widget todo-widget" data-widget="todo" aria-label="今日待办窗口">
+      <header class="widget-header">
+        <span class="drag-grip" aria-hidden="true"></span>
+        <div class="header-copy"><h1>今日待办</h1><p>TO-DO · MON 10 AUG</p></div>
+        <div class="header-actions">
+          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+            <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
+          </button>
+          <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="widget-menu" role="menu">
+            <button type="button" data-menu-action="compact">切换到紧凑模式</button>
+            <button type="button" data-menu-action="minimize">折叠成书页</button>
+            <button type="button" data-menu-action="reset">恢复初始位置</button>
+            <button type="button" data-menu-action="switcher">窗口总开关…</button>
+            <button type="button" data-menu-action="close">关闭这个组件</button>
+          </div>
+        </div>
+      </header>
+      <div class="widget-body" id="todo-main-view">
+        <div class="todo-summary">
+          <div><div class="summary-date">2026 / 08 / 10</div><div class="summary-title">今日完成 <em id="done-count">2</em> 项</div></div>
+          <div class="progress-copy"><span>总共完成</span><strong id="all-time-count">36</strong><span>项</span></div>
+        </div>
+        <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="progress-fill"></div></div>
+
+        <div class="task-list" id="task-list">
+          <div class="task" id="repeat-task" data-task-id="task-words" data-start="2026-08-10" data-end="2026-12-31" data-repeat="daily" data-weekdays="" data-reminder-enabled="true" data-reminder-time="20:30">
+            <button class="task-check" type="button" aria-label="完成背单词"><svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg></button>
+            <div class="task-copy"><strong>背单词</strong><small>每天重复 · 20:30 提醒</small></div>
+            <div class="task-actions"><span class="task-kind">DAILY</span><button class="task-edit" type="button" aria-label="编辑背单词" title="编辑待办"><svg viewBox="0 0 20 20"><path d="m12.5 3.5 4 4-9 9H3.5v-4l9-9Z"/><path d="m10.5 5.5 4 4"/></svg></button></div>
+          </div>
+          <div class="task" data-task-id="task-homepage" data-start="2026-08-10" data-end="2026-08-10" data-repeat="none" data-weekdays="" data-reminder-enabled="true" data-reminder-time="18:00">
+            <button class="task-check" type="button" aria-label="完成电商项目首页"><svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg></button>
+            <div class="task-copy"><strong>完成电商项目首页</strong><small>今天 · 18:00</small></div>
+            <div class="task-actions"><span class="task-kind">WORK</span><button class="task-edit" type="button" aria-label="编辑完成电商项目首页" title="编辑待办"><svg viewBox="0 0 20 20"><path d="m12.5 3.5 4 4-9 9H3.5v-4l9-9Z"/><path d="m10.5 5.5 4 4"/></svg></button></div>
+          </div>
+          <div class="task" data-task-id="task-listening" data-start="2026-08-10" data-end="2026-08-10" data-repeat="none" data-weekdays="" data-reminder-enabled="false" data-reminder-time="20:30">
+            <button class="task-check" type="button" aria-label="完成雅思听力精听"><svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg></button>
+            <div class="task-copy"><strong>雅思听力精听 30 分钟</strong><small>今天 · 无提醒</small></div>
+            <div class="task-actions"><span class="task-kind">STUDY</span><button class="task-edit" type="button" aria-label="编辑雅思听力精听 30 分钟" title="编辑待办"><svg viewBox="0 0 20 20"><path d="m12.5 3.5 4 4-9 9H3.5v-4l9-9Z"/><path d="m10.5 5.5 4 4"/></svg></button></div>
+          </div>
+        </div>
+        <div class="todo-footer"><small id="remaining-copy">还有 3 项</small><button class="text-button" id="add-task" type="button">＋ 新待办</button></div>
+      </div>
+      <form class="task-editor" id="task-editor" aria-hidden="true" inert>
+        <div class="editor-head">
+          <div><div class="editor-kicker" id="task-editor-kicker">STEP 02 / SCHEDULE</div><h2 id="task-editor-title">新建待办</h2></div>
+          <button class="back-button" id="close-editor" type="button" aria-label="返回待办列表" title="返回">←</button>
+        </div>
+        <label class="field">
+          <span class="field-label">任务名称</span>
+          <input id="task-title" placeholder="例如：复习本周单词" autocomplete="off" />
+        </label>
+        <div class="date-fields">
+          <label class="field">
+            <span class="field-label">开始日期</span>
+            <input id="task-start" type="date" value="2026-08-10" />
+          </label>
+          <label class="field">
+            <span class="field-label">结束日期</span>
+            <input id="task-end" type="date" value="2026-08-10" />
+          </label>
+        </div>
+        <label class="field">
+          <span class="field-label">重复周期</span>
+          <select id="task-repeat">
+            <option value="none">不重复</option>
+            <option value="daily">每天</option>
+            <option value="weekdays">每个工作日</option>
+            <option value="weekly">每周</option>
+            <option value="monthly">每月</option>
+            <option value="yearly">每年</option>
+          </select>
+        </label>
+        <div class="weekday-field" id="weekday-field">
+          <span class="field-label">每周重复日</span>
+          <div class="weekday-row">
+            <label><input type="checkbox" value="一" checked /><span>一</span></label>
+            <label><input type="checkbox" value="二" /><span>二</span></label>
+            <label><input type="checkbox" value="三" /><span>三</span></label>
+            <label><input type="checkbox" value="四" /><span>四</span></label>
+            <label><input type="checkbox" value="五" /><span>五</span></label>
+            <label><input type="checkbox" value="六" /><span>六</span></label>
+            <label><input type="checkbox" value="日" /><span>日</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="field-label">提醒</span>
+          <div class="reminder-row">
+            <label class="switch-control"><input id="reminder-enabled" type="checkbox" /><span>开启提醒</span></label>
+            <input id="reminder-time" type="time" value="20:30" disabled />
+          </div>
+        </div>
+        <p class="editor-error" id="editor-error" role="alert"></p>
+        <div class="editor-actions">
+          <button class="secondary-button" id="cancel-task" type="button">取消</button>
+          <button class="primary-button" id="save-task" type="submit">保存待办</button>
+        </div>
+      </form>
+      <div class="done-stamp" id="done-stamp">完成</div>
+    </section>
+
+    <section class="widget countdown-widget" data-widget="countdown" aria-label="倒计时窗口">
+      <header class="widget-header">
+        <span class="drag-grip" aria-hidden="true"></span>
+        <div class="header-copy"><h1>倒计时</h1><p>COUNTDOWN</p></div>
+        <div class="header-actions">
+          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+            <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
+          </button>
+          <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="widget-menu" role="menu">
+            <button type="button" data-menu-action="compact">切换到紧凑模式</button>
+            <button type="button" data-menu-action="minimize">折叠成书页</button>
+            <button type="button" data-menu-action="reset">恢复初始位置</button>
+            <button type="button" data-menu-action="switcher">窗口总开关…</button>
+            <button type="button" data-menu-action="close">关闭这个组件</button>
+          </div>
+        </div>
+      </header>
+      <div class="widget-body" id="countdown-main-view">
+        <div class="clock-line"><span>距离目标日</span><span class="live-time" id="live-time">--:--:--</span></div>
+        <div class="countdown-list" id="countdown-list">
+          <article class="countdown-item" data-countdown-id="countdown-gre" data-built-in="true" data-target="2026-12-16T09:00:00" data-warning-minutes="4320">
+            <div class="countdown-top"><span class="countdown-name">GRE 考试</span><div class="countdown-actions"><span class="countdown-status">正常</span><button class="countdown-ack" type="button" aria-label="拍一下，让 GRE 考试本次紧急提醒安静">拍一下</button><button class="countdown-delete" type="button" aria-label="删除 GRE 考试倒计时" title="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></div></div>
+            <div class="countdown-value"><strong>128</strong><span>天</span></div>
+            <div class="countdown-date"><span>2026.12.16 09:00</span><span>提前 3 天紧急</span></div>
+            <div class="countdown-rule"></div>
+          </article>
+          <article class="countdown-item" data-countdown-id="countdown-launch" data-built-in="true" data-target="2026-08-22T18:00:00" data-warning-minutes="1440">
+            <div class="countdown-top"><span class="countdown-name">项目上线</span><div class="countdown-actions"><span class="countdown-status">正常</span><button class="countdown-ack" type="button" aria-label="拍一下，让项目上线本次紧急提醒安静">拍一下</button><button class="countdown-delete" type="button" aria-label="删除 项目上线倒计时" title="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></div></div>
+            <div class="countdown-value"><strong>12</strong><span>天</span></div>
+            <div class="countdown-date"><span>2026.08.22 18:00</span><span>提前 1 天紧急</span></div>
+            <div class="countdown-rule"></div>
+          </article>
+        </div>
+        <div class="countdown-footer"><small>24 小时内 · 每 8 小时提醒一次</small><button class="text-button countdown-add-button" id="add-countdown" type="button">＋ 新倒计时</button></div>
+      </div>
+      <form class="countdown-editor" id="countdown-editor" aria-hidden="true" inert>
+        <div class="editor-head">
+          <div><div class="editor-kicker">COUNTDOWN / NEW</div><h2>新建倒计时</h2></div>
+          <button class="back-button" id="close-countdown-editor" type="button" aria-label="返回倒计时列表" title="返回">←</button>
+        </div>
+        <label class="field">
+          <span class="field-label">倒计时名称</span>
+          <input id="countdown-title" placeholder="例如：论文提交" autocomplete="off" />
+        </label>
+        <label class="field">
+          <span class="field-label">截止日期与时间</span>
+          <input id="countdown-target" type="datetime-local" />
+        </label>
+        <label class="field">
+          <span class="field-label">紧急抖动计划</span>
+          <select id="countdown-warning">
+            <option value="1440" selected>截止前 24、16、8 小时（共 3 次）</option>
+          </select>
+        </label>
+        <p class="editor-error" id="countdown-error" role="alert"></p>
+        <div class="editor-actions">
+          <button class="secondary-button" id="cancel-countdown" type="button">取消</button>
+          <button class="primary-button" type="submit">保存倒计时</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="widget files-widget" data-widget="files" aria-label="文件收纳窗口">
+      <header class="widget-header">
+        <span class="drag-grip" aria-hidden="true"></span>
+        <div class="header-copy"><h1>文件收纳</h1><p>QUICK SHELF</p></div>
+        <div class="header-actions">
+          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+            <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
+          </button>
+          <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <div class="widget-menu" role="menu">
+            <button type="button" data-menu-action="compact">切换到紧凑模式</button>
+            <button type="button" data-menu-action="minimize">折叠成书页</button>
+            <button type="button" data-menu-action="reset">恢复初始位置</button>
+            <button type="button" data-menu-action="switcher">窗口总开关…</button>
+            <button type="button" data-menu-action="close">关闭这个组件</button>
+          </div>
+        </div>
+      </header>
+      <div class="widget-body">
+        <div class="shelf-summary"><strong>快捷收纳盒</strong><span id="file-count">4 ITEMS</span></div>
+        <div class="file-grid" id="file-grid">
+          <div class="file-item" role="button" tabindex="0" data-file-id="file-demo-paper" data-built-in="true" data-name="论文资料.pdf"><span class="file-type">PDF</span><span class="file-name">论文资料.pdf</span><span class="file-actions"><button class="file-action file-copy" type="button" aria-label="复制 论文资料.pdf" title="复制"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11"/><path d="M16 8V5H5v11h3"/></svg></button><button class="file-action file-delete" type="button" aria-label="删除 论文资料.pdf" title="删除"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span></div>
+          <div class="file-item" role="button" tabindex="0" data-file-id="file-demo-materials" data-built-in="true" data-name="项目素材"><span class="file-type">DIR</span><span class="file-name">项目素材</span><span class="file-actions"><button class="file-action file-copy" type="button" aria-label="复制 项目素材" title="复制"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11"/><path d="M16 8V5H5v11h3"/></svg></button><button class="file-action file-delete" type="button" aria-label="删除 项目素材" title="删除"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span></div>
+          <div class="file-item" role="button" tabindex="0" data-file-id="file-demo-backup" data-built-in="true" data-name="设计备份.zip"><span class="file-type">ZIP</span><span class="file-name">设计备份.zip</span><span class="file-actions"><button class="file-action file-copy" type="button" aria-label="复制 设计备份.zip" title="复制"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11"/><path d="M16 8V5H5v11h3"/></svg></button><button class="file-action file-delete" type="button" aria-label="删除 设计备份.zip" title="删除"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span></div>
+          <div class="file-item" role="button" tabindex="0" data-file-id="file-demo-reference" data-built-in="true" data-name="参考图.png"><span class="file-type">PNG</span><span class="file-name">参考图.png</span><span class="file-actions"><button class="file-action file-copy" type="button" aria-label="复制 参考图.png" title="复制"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11"/><path d="M16 8V5H5v11h3"/></svg></button><button class="file-action file-delete" type="button" aria-label="删除 参考图.png" title="删除"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span></div>
+        </div>
+        <button class="drop-zone" id="drop-zone" type="button">拖入文件建立快捷引用</button>
+        <input id="file-input" type="file" multiple hidden />
+      </div>
+    </section>
+  </main>
+
+  <button class="launcher-reopen" id="launcher-reopen" type="button">窗口总开关</button>
+  <div class="launcher-overlay" id="launcher-overlay" role="dialog" aria-modal="true" aria-labelledby="launcher-title">
+    <form class="launcher-panel" id="launcher-form">
+      <div class="launcher-head">
+        <div><div class="launcher-kicker">DESKTOP / STARTUP</div><h2 id="launcher-title">今天打开哪些窗口？</h2><p>每次启动都会先在这里确认，不会擅自铺满桌面。</p></div>
+        <label class="master-switch"><span>总开关</span><input id="launcher-master" type="checkbox" checked /><span class="switch-track" aria-hidden="true"></span></label>
+      </div>
+      <div class="module-options">
+        <label class="module-choice"><input type="checkbox" value="todo" checked /><span class="module-card"><span class="module-icon">TO</span><span><strong>今日待办</strong><small>任务、周期和到点提醒</small></span><span class="module-toggle" aria-hidden="true"></span></span></label>
+        <label class="module-choice"><input type="checkbox" value="countdown" checked /><span class="module-card"><span class="module-icon">CD</span><span><strong>倒计时</strong><small>24 / 16 / 8 小时紧急提醒</small></span><span class="module-toggle" aria-hidden="true"></span></span></label>
+        <label class="module-choice"><input type="checkbox" value="files" checked /><span class="module-card"><span class="module-icon">FS</span><span><strong>文件收纳</strong><small>本地文件引用与快速打开</small></span><span class="module-toggle" aria-hidden="true"></span></span></label>
+      </div>
+      <div class="launcher-foot"><div class="launcher-foot-copy"><label class="autostart-option"><input id="autostart-enabled" type="checkbox" checked />开机自动启动</label><small>选择会被记住；下次启动仍会再次询问。</small></div><button class="launcher-start" type="submit">进入桌面 →</button></div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"><span id="toast-copy">操作完成</span><button id="undo-button" type="button">撤销</button></div>
+  <div class="reminder-alert" id="reminder-alert" role="alertdialog" aria-live="assertive" aria-labelledby="reminder-alert-title">
+    <span class="reminder-bell" aria-hidden="true">!</span>
+    <div class="reminder-copy"><strong id="reminder-alert-title">待办提醒</strong><span id="reminder-alert-time">现在该处理了</span></div>
+    <button class="reminder-dismiss" id="reminder-dismiss" type="button">知道了</button>
+  </div>
+
+  <script>
+    const embeddedWidget = window.desktopWidgetMode || null;
+    let embeddedManualSize = Boolean(window.desktopManualSize);
+    const stage = document.getElementById('stage');
+    const widgets = [...document.querySelectorAll('.widget')];
+    const toast = document.getElementById('toast');
+    const toastCopy = document.getElementById('toast-copy');
+    const undoButton = document.getElementById('undo-button');
+    let toastTimer = 0;
+    let lastCompleted = null;
+    let lastDeletedCountdown = null;
+    let lastDeletedFile = null;
+    let undoType = null;
+    let completedCount = 2;
+    let totalCount = 5;
+    let allTimeCompleted = Number(localStorage.getItem('desk-all-time-completed') || 36);
+
+    if (window.qt?.webChannelTransport && window.QWebChannel) {
+      new QWebChannel(window.qt.webChannelTransport, channel => {
+        const native = channel.objects.desktopBridge;
+        const callNative = (method, ...args) => new Promise(resolve => native[method](...args, resolve));
+        window.desktopBridge = {
+          openPath: path => callNative('openPath', path),
+          copyFiles: paths => callNative('copyFiles', paths),
+          chooseFiles: () => callNative('chooseFiles'),
+          notify: (title, body) => native.notify(title, body),
+          setEnabledModules: modules => native.setEnabledModules(modules),
+          setAutoStart: enabled => callNative('setAutoStart', enabled),
+          beginMove: () => native.beginMove(),
+          beginResize: edgeMask => native.beginResize(edgeMask),
+          setManualSize: enabled => native.setManualSize(enabled),
+          setAlwaysOnTop: enabled => native.setAlwaysOnTop(enabled),
+          resizeWindow: (width, height) => native.resizeWindow(width, height),
+          resetPosition: () => native.resetPosition(),
+          hideWindow: () => native.hideWindow(),
+          openSwitcher: () => native.openSwitcher(),
+        };
+        document.documentElement.classList.add('native-app');
+        syncEmbeddedWindowSize();
+      });
+    }
+
+    function showToast(message, canUndo = false, type = null) {
+      toastCopy.textContent = message;
+      undoButton.hidden = !canUndo;
+      undoType = canUndo ? type : null;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 4200);
+    }
+
+    const launcherOverlay = document.getElementById('launcher-overlay');
+    const launcherForm = document.getElementById('launcher-form');
+    const launcherMaster = document.getElementById('launcher-master');
+    const launcherReopen = document.getElementById('launcher-reopen');
+    const autostartEnabled = document.getElementById('autostart-enabled');
+    const launcherInputs = [...launcherForm.querySelectorAll('.module-choice input')];
+    let savedWidgetSelection = ['todo', 'countdown', 'files'];
+    try {
+      const storedSelection = JSON.parse(localStorage.getItem('desk-enabled-widgets') || 'null');
+      if (Array.isArray(storedSelection)) savedWidgetSelection = storedSelection;
+    } catch (_) {}
+    autostartEnabled.checked = localStorage.getItem('desk-autostart-enabled') !== 'false';
+
+    function syncLauncherMaster() {
+      const enabledCount = launcherInputs.filter(input => input.checked).length;
+      launcherMaster.checked = enabledCount === launcherInputs.length;
+      launcherMaster.indeterminate = enabledCount > 0 && enabledCount < launcherInputs.length;
+      launcherMaster.setAttribute('aria-label', enabledCount === launcherInputs.length ? '关闭全部窗口' : '开启全部窗口');
+    }
+
+    function loadLauncherSelection() {
+      launcherInputs.forEach(input => { input.checked = savedWidgetSelection.includes(input.value); });
+      syncLauncherMaster();
+    }
+
+    function openLauncher() {
+      loadLauncherSelection();
+      stage.inert = true;
+      launcherOverlay.classList.remove('closed');
+      launcherOverlay.setAttribute('aria-hidden', 'false');
+      setTimeout(() => launcherInputs.find(input => input.checked)?.focus() || launcherMaster.focus(), 80);
+    }
+
+    function closeLauncher() {
+      stage.inert = false;
+      launcherOverlay.classList.add('closed');
+      launcherOverlay.setAttribute('aria-hidden', 'true');
+      launcherReopen.focus();
+    }
+
+    function applyWidgetSelection(selection) {
+      widgets.forEach(widget => widget.classList.toggle('module-off', !selection.includes(widget.dataset.widget)));
+    }
+
+    let embeddedResizeObserver = null;
+    function syncEmbeddedWindowSize() {
+      if (!embeddedWidget || embeddedManualSize || !window.desktopBridge?.resizeWindow) return;
+      const widget = document.querySelector(`[data-widget="${embeddedWidget}"]`);
+      if (!widget) return;
+      requestAnimationFrame(() => {
+        const widgetRect = widget.getBoundingClientRect();
+        const openMenu = widget.querySelector('.widget-menu.open');
+        const menuBottom = openMenu ? openMenu.getBoundingClientRect().bottom : 0;
+        const foldedExtra = widget.classList.contains('minimized') ? 26 : 0;
+        const width = Math.ceil(widgetRect.right + 15);
+        const height = Math.ceil(Math.max(widgetRect.bottom + foldedExtra, menuBottom) + 18);
+        window.desktopBridge.resizeWindow(width, height);
+      });
+    }
+
+    function setEmbeddedManualSize(enabled) {
+      if (!embeddedWidget) return;
+      embeddedManualSize = enabled;
+      document.documentElement.classList.toggle('native-manual-size', enabled);
+      window.desktopBridge?.setManualSize?.(enabled);
+    }
+
+    const nativeResizeClasses = ['native-resize-ew', 'native-resize-ns', 'native-resize-nwse', 'native-resize-nesw'];
+    function embeddedResizeEdgeMask(clientX, clientY) {
+      if (!embeddedWidget) return 0;
+      const widget = document.querySelector(`[data-widget="${embeddedWidget}"]`);
+      if (!widget) return 0;
+      const rect = widget.getBoundingClientRect();
+      const threshold = 8;
+      let mask = 0;
+      if (Math.abs(clientX - rect.left) <= threshold) mask |= 1;
+      else if (Math.abs(clientX - rect.right) <= threshold) mask |= 4;
+      if (Math.abs(clientY - rect.top) <= threshold) mask |= 2;
+      else if (Math.abs(clientY - rect.bottom) <= threshold) mask |= 8;
+      return mask;
+    }
+
+    function nativeResizeCursor(mask) {
+      if (mask === 1 || mask === 4) return 'native-resize-ew';
+      if (mask === 2 || mask === 8) return 'native-resize-ns';
+      if (mask === 3 || mask === 12) return 'native-resize-nwse';
+      if (mask === 6 || mask === 9) return 'native-resize-nesw';
+      return '';
+    }
+
+    function showNativeResizeCursor(mask) {
+      const root = document.documentElement;
+      nativeResizeClasses.forEach(name => root.classList.remove(name));
+      const cursorClass = nativeResizeCursor(mask);
+      if (cursorClass) root.classList.add(cursorClass);
+    }
+
+    if (embeddedWidget) {
+      window.addEventListener('pointermove', event => {
+        if (event.buttons) return;
+        showNativeResizeCursor(embeddedResizeEdgeMask(event.clientX, event.clientY));
+      }, true);
+      window.addEventListener('pointerleave', () => showNativeResizeCursor(0), true);
+      window.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        const edgeMask = embeddedResizeEdgeMask(event.clientX, event.clientY);
+        if (!edgeMask) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setEmbeddedManualSize(true);
+        window.desktopBridge?.beginResize?.(edgeMask);
+      }, true);
+    }
+
+    function setupEmbeddedWindow() {
+      if (!embeddedWidget) return;
+      applyWidgetSelection([embeddedWidget]);
+      const widget = document.querySelector(`[data-widget="${embeddedWidget}"]`);
+      if (!widget || embeddedResizeObserver) return;
+      embeddedResizeObserver = new ResizeObserver(syncEmbeddedWindowSize);
+      embeddedResizeObserver.observe(widget);
+      syncEmbeddedWindowSize();
+    }
+
+    launcherMaster.addEventListener('change', () => {
+      const turnOn = launcherMaster.checked;
+      launcherInputs.forEach(input => { input.checked = turnOn; });
+      syncLauncherMaster();
+    });
+    launcherInputs.forEach(input => input.addEventListener('change', syncLauncherMaster));
+    launcherForm.addEventListener('submit', event => {
+      event.preventDefault();
+      savedWidgetSelection = launcherInputs.filter(input => input.checked).map(input => input.value);
+      localStorage.setItem('desk-enabled-widgets', JSON.stringify(savedWidgetSelection));
+      localStorage.setItem('desk-autostart-enabled', String(autostartEnabled.checked));
+      applyWidgetSelection(savedWidgetSelection);
+      closeLauncher();
+      window.desktopBridge?.setEnabledModules?.(savedWidgetSelection);
+      window.desktopBridge?.setAutoStart?.(autostartEnabled.checked);
+      showToast(savedWidgetSelection.length ? `已打开 ${savedWidgetSelection.length} 个窗口` : '当前未打开窗口，可随时使用右上角总开关');
+    });
+    launcherReopen.addEventListener('click', () => embeddedWidget ? window.desktopBridge?.openSwitcher?.() : openLauncher());
+    loadLauncherSelection();
+    if (embeddedWidget) {
+      launcherOverlay.classList.add('closed');
+      launcherOverlay.setAttribute('aria-hidden', 'true');
+      stage.inert = false;
+      setupEmbeddedWindow();
+    } else {
+      openLauncher();
+    }
+
+    function closeMenus(except = null) {
+      document.querySelectorAll('.widget-menu.open').forEach(menu => {
+        if (menu !== except) menu.classList.remove('open');
+      });
+    }
+
+    widgets.forEach((widget, index) => {
+      const name = widget.dataset.widget;
+      const pinButton = widget.querySelector('.pin-button');
+      const menuButton = widget.querySelector('.menu-button');
+      const menu = widget.querySelector('.widget-menu');
+      const stored = localStorage.getItem(`desk-position-${name}`);
+      if (stored && innerWidth > 780) {
+        try {
+          const position = JSON.parse(stored);
+          widget.style.left = `${position.left}px`;
+          widget.style.top = `${position.top}px`;
+        } catch (_) {}
+      }
+
+      pinButton.addEventListener('click', event => {
+        event.stopPropagation();
+        const pinned = widget.classList.toggle('pinned');
+        pinButton.classList.toggle('active', pinned);
+        pinButton.setAttribute('aria-pressed', String(pinned));
+        pinButton.title = pinned ? '取消置顶' : '置顶窗口';
+        widget.style.zIndex = pinned ? 50 + index : 2 + index;
+        if (embeddedWidget === name) window.desktopBridge?.setAlwaysOnTop?.(pinned);
+        showToast(pinned ? `${widget.getAttribute('aria-label')}已置顶` : '已取消置顶');
+      });
+
+      menuButton.addEventListener('click', event => {
+        event.stopPropagation();
+        const willOpen = !menu.classList.contains('open');
+        closeMenus(menu);
+        menu.classList.toggle('open', willOpen);
+        menuButton.classList.toggle('active', willOpen);
+        syncEmbeddedWindowSize();
+      });
+
+      menu.addEventListener('click', event => {
+        const action = event.target.dataset.menuAction;
+        if (!action) return;
+        if (action === 'compact') {
+          setEmbeddedManualSize(false);
+          const compact = widget.classList.toggle('compact');
+          event.target.textContent = compact ? '切换到标准模式' : '切换到紧凑模式';
+          event.target.setAttribute('aria-pressed', String(compact));
+          showToast(compact ? '窗口已缩为紧凑卡片' : '窗口已恢复标准尺寸');
+        }
+        if (action === 'minimize') {
+          setEmbeddedManualSize(false);
+          const minimized = widget.classList.toggle('minimized');
+          event.target.textContent = minimized ? '展开书页' : '折叠成书页';
+          widget.title = minimized ? '双击封面展开窗口' : '';
+          showToast(minimized ? '窗口已折叠成三层书页' : '窗口已展开');
+        }
+        if (action === 'reset') {
+          if (embeddedWidget === name) window.desktopBridge?.resetPosition?.();
+          else {
+            widget.style.left = '';
+            widget.style.top = '';
+            localStorage.removeItem(`desk-position-${name}`);
+          }
+          showToast('窗口已回到初始位置');
+        }
+        if (action === 'close') window.desktopBridge?.hideWindow?.();
+        if (action === 'switcher') window.desktopBridge?.openSwitcher?.();
+        menu.classList.remove('open');
+        menuButton.classList.remove('active');
+        syncEmbeddedWindowSize();
+      });
+
+      const header = widget.querySelector('.widget-header');
+      let drag = null;
+      header.addEventListener('dblclick', event => {
+        if (event.target.closest('button') || !widget.classList.contains('minimized')) return;
+        widget.classList.remove('minimized');
+        widget.title = '';
+        widget.querySelector('[data-menu-action="minimize"]').textContent = '折叠成书页';
+        showToast('窗口已展开');
+        syncEmbeddedWindowSize();
+      });
+      header.addEventListener('pointerdown', event => {
+        if (event.target.closest('button')) return;
+        if (embeddedWidget === name) {
+          event.preventDefault();
+          window.desktopBridge?.beginMove?.();
+          return;
+        }
+        if (innerWidth <= 780) return;
+        const rect = widget.getBoundingClientRect();
+        drag = { startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top, pointerId: event.pointerId };
+        widget.style.left = `${rect.left}px`;
+        widget.style.top = `${rect.top}px`;
+        widget.classList.add('dragging');
+        header.setPointerCapture(event.pointerId);
+      });
+      header.addEventListener('pointermove', event => {
+        if (!drag || event.pointerId !== drag.pointerId) return;
+        const maxLeft = Math.max(8, innerWidth - widget.offsetWidth - 8);
+        const maxTop = Math.max(8, innerHeight - 64);
+        const left = Math.min(maxLeft, Math.max(8, drag.left + event.clientX - drag.startX));
+        const top = Math.min(maxTop, Math.max(8, drag.top + event.clientY - drag.startY));
+        widget.style.left = `${left}px`;
+        widget.style.top = `${top}px`;
+      });
+      header.addEventListener('pointerup', event => {
+        if (!drag) return;
+        header.releasePointerCapture(event.pointerId);
+        widget.classList.remove('dragging');
+        localStorage.setItem(`desk-position-${name}`, JSON.stringify({ left: parseFloat(widget.style.left), top: parseFloat(widget.style.top) }));
+        drag = null;
+      });
+    });
+
+    document.addEventListener('click', () => {
+      closeMenus();
+      document.querySelectorAll('.menu-button.active').forEach(button => button.classList.remove('active'));
+    });
+
+    function burstAt(element) {
+      const rect = element.getBoundingClientRect();
+      for (let i = 0; i < 14; i += 1) {
+        const particle = document.createElement('i');
+        const angle = Math.PI * 2 * i / 14;
+        const distance = 28 + Math.random() * 35;
+        particle.className = 'particle';
+        particle.style.left = `${rect.left + rect.width / 2}px`;
+        particle.style.top = `${rect.top + rect.height / 2}px`;
+        particle.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+        particle.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
+        particle.style.setProperty('--rot', `${Math.random() * 260 - 130}deg`);
+        document.body.appendChild(particle);
+        setTimeout(() => particle.remove(), 720);
+      }
+    }
+
+    function updateProgress() {
+      document.getElementById('done-count').textContent = completedCount;
+      document.getElementById('all-time-count').textContent = allTimeCompleted;
+      document.getElementById('progress-fill').style.width = `${Math.min(100, completedCount / totalCount * 100)}%`;
+      const remaining = document.querySelectorAll('.task:not(.completed)').length;
+      document.getElementById('remaining-copy').textContent = remaining ? `还有 ${remaining} 项` : '今日任务已清空';
+    }
+
+    document.getElementById('task-list').addEventListener('click', event => {
+      const editButton = event.target.closest('.task-edit');
+      if (editButton) {
+        openTaskEditor(editButton.closest('.task'));
+        return;
+      }
+      const check = event.target.closest('.task-check');
+      if (!check) return;
+      const task = check.closest('.task');
+      if (task.classList.contains('completing')) return;
+      if (task.classList.contains('reminding')) dismissTaskReminder(task);
+      lastCompleted = task;
+      task.classList.add('completing');
+      completedCount = Math.min(totalCount, completedCount + 1);
+      allTimeCompleted += 1;
+      localStorage.setItem('desk-all-time-completed', String(allTimeCompleted));
+      updateProgress();
+      burstAt(check);
+      const stamp = document.getElementById('done-stamp');
+      stamp.classList.remove('show');
+      requestAnimationFrame(() => stamp.classList.add('show'));
+      const repeatType = task.dataset.repeat || 'none';
+      const repeating = task.id === 'repeat-task' || repeatType !== 'none';
+      const completionMessage = repeating
+        ? (repeatType === 'daily' || repeatType === 'weekdays' ? '今日已完成，明天继续' : '本次已完成，下个周期继续')
+        : '做得很好，已收入完成记录';
+      showToast(completionMessage, true, 'task');
+      setTimeout(() => {
+        task.classList.add('completed');
+        updateProgress();
+      }, 620);
+    });
+
+    undoButton.addEventListener('click', () => {
+      if (undoType === 'file' && lastDeletedFile) {
+        restoreDeletedFile();
+        toast.classList.remove('show');
+        undoType = null;
+        return;
+      }
+      if (undoType === 'countdown' && lastDeletedCountdown) {
+        restoreDeletedCountdown();
+        toast.classList.remove('show');
+        undoType = null;
+        return;
+      }
+      if (undoType !== 'task' || !lastCompleted) return;
+      lastCompleted.classList.remove('completing', 'completed');
+      completedCount = Math.max(0, completedCount - 1);
+      allTimeCompleted = Math.max(0, allTimeCompleted - 1);
+      localStorage.setItem('desk-all-time-completed', String(allTimeCompleted));
+      updateProgress();
+      toast.classList.remove('show');
+      lastCompleted = null;
+      undoType = null;
+    });
+
+    const todoWidget = document.querySelector('[data-widget="todo"]');
+    const todoMainView = document.getElementById('todo-main-view');
+    const taskEditor = document.getElementById('task-editor');
+    const taskTitle = document.getElementById('task-title');
+    const taskStart = document.getElementById('task-start');
+    const taskEnd = document.getElementById('task-end');
+    const taskRepeat = document.getElementById('task-repeat');
+    const weekdayField = document.getElementById('weekday-field');
+    const reminderEnabled = document.getElementById('reminder-enabled');
+    const reminderTime = document.getElementById('reminder-time');
+    const editorError = document.getElementById('editor-error');
+    const taskEditorTitle = document.getElementById('task-editor-title');
+    const taskEditorKicker = document.getElementById('task-editor-kicker');
+    const saveTaskButton = document.getElementById('save-task');
+    let editingTask = null;
+    let savedTaskRecords = {};
+    try { savedTaskRecords = JSON.parse(localStorage.getItem('desk-tasks') || '{}'); } catch (_) { savedTaskRecords = {}; }
+
+    const taskRepeatLabels = {
+      none: '不重复',
+      daily: '每天',
+      weekdays: '每个工作日',
+      monthly: '每月',
+      yearly: '每年',
+    };
+    const taskKindLabels = { none: 'DATE', daily: 'DAILY', weekdays: 'WEEKDAY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' };
+    const editIcon = '<svg viewBox="0 0 20 20"><path d="m12.5 3.5 4 4-9 9H3.5v-4l9-9Z"/><path d="m10.5 5.5 4 4"/></svg>';
+
+    function taskDataFromElement(task) {
+      return {
+        id: task.dataset.taskId,
+        title: task.querySelector('.task-copy strong').textContent,
+        start: task.dataset.start || '2026-08-10',
+        end: task.dataset.end || task.dataset.start || '2026-08-10',
+        repeat: task.dataset.repeat || 'none',
+        weekdays: (task.dataset.weekdays || '').split(',').filter(Boolean),
+        reminderEnabled: task.dataset.reminderEnabled === 'true',
+        reminderTime: task.dataset.reminderTime || '20:30',
+        custom: task.dataset.custom === 'true',
+      };
+    }
+
+    function taskDetails(data) {
+      const range = data.start === data.end ? displayDate(data.start) : `${displayDate(data.start)}—${displayDate(data.end)}`;
+      const repeatLabel = data.repeat === 'weekly' ? `每周（${data.weekdays.join('、')}）` : taskRepeatLabels[data.repeat];
+      const reminder = data.reminderEnabled ? `${data.reminderTime} 提醒` : '无提醒';
+      return `${range} · ${repeatLabel} · ${reminder}`;
+    }
+
+    function renderTask(task, data) {
+      task.dataset.taskId = data.id;
+      task.dataset.start = data.start;
+      task.dataset.end = data.end;
+      task.dataset.repeat = data.repeat;
+      task.dataset.weekdays = data.weekdays.join(',');
+      task.dataset.reminderEnabled = String(data.reminderEnabled);
+      task.dataset.reminderTime = data.reminderTime;
+      task.dataset.custom = String(Boolean(data.custom));
+      task.querySelector('.task-copy strong').textContent = data.title;
+      task.querySelector('.task-copy small').textContent = taskDetails(data);
+      task.querySelector('.task-kind').textContent = taskKindLabels[data.repeat];
+      task.querySelector('.task-check').setAttribute('aria-label', `完成${data.title}`);
+      task.querySelector('.task-edit').setAttribute('aria-label', `编辑${data.title}`);
+    }
+
+    function createTaskElement(data) {
+      const task = document.createElement('div');
+      task.className = 'task';
+      task.innerHTML = `<button class="task-check" type="button"><svg viewBox="0 0 20 20"><path d="m4 10 4 4 8-9"/></svg></button><div class="task-copy"><strong></strong><small></small></div><div class="task-actions"><span class="task-kind"></span><button class="task-edit" type="button" title="编辑待办">${editIcon}</button></div>`;
+      renderTask(task, data);
+      return task;
+    }
+
+    function persistTask(task) {
+      const data = taskDataFromElement(task);
+      savedTaskRecords[data.id] = data;
+      localStorage.setItem('desk-tasks', JSON.stringify(savedTaskRecords));
+    }
+
+    document.querySelectorAll('#task-list .task').forEach(task => {
+      const saved = savedTaskRecords[task.dataset.taskId];
+      if (saved) renderTask(task, saved);
+    });
+    Object.values(savedTaskRecords).filter(data => data.custom).forEach(data => {
+      if (document.querySelector(`[data-task-id="${data.id}"]`)) return;
+      document.getElementById('task-list').appendChild(createTaskElement(data));
+      totalCount += 1;
+    });
+    updateProgress();
+
+    function openTaskEditor(task = null) {
+      closeMenus();
+      if (typeof closeCountdownEditor === 'function') closeCountdownEditor();
+      editingTask = task;
+      taskEditorTitle.textContent = task ? '编辑待办' : '新建待办';
+      taskEditorKicker.textContent = task ? 'TASK / EDIT' : 'STEP 02 / SCHEDULE';
+      saveTaskButton.textContent = task ? '保存修改' : '保存待办';
+
+      if (task) {
+        const data = taskDataFromElement(task);
+        taskTitle.value = data.title;
+        taskStart.value = data.start;
+        taskEnd.value = data.end;
+        taskEnd.min = data.start;
+        taskRepeat.value = data.repeat;
+        document.querySelectorAll('#weekday-field input').forEach(input => { input.checked = data.weekdays.includes(input.value); });
+        weekdayField.classList.toggle('show', data.repeat === 'weekly');
+        reminderEnabled.checked = data.reminderEnabled;
+        reminderTime.value = data.reminderTime || '20:30';
+        reminderTime.disabled = !data.reminderEnabled;
+      } else {
+        taskEditor.reset();
+        taskStart.value = '2026-08-10';
+        taskEnd.value = '2026-08-10';
+        taskEnd.min = taskStart.value;
+        weekdayField.classList.remove('show');
+        reminderTime.value = '20:30';
+        reminderTime.disabled = true;
+      }
+
+      todoWidget.classList.add('editing');
+      todoMainView.inert = true;
+      todoMainView.setAttribute('aria-hidden', 'true');
+      taskEditor.inert = false;
+      taskEditor.setAttribute('aria-hidden', 'false');
+      editorError.textContent = '';
+      setTimeout(() => taskTitle.focus(), 240);
+    }
+
+    function closeTaskEditor() {
+      todoWidget.classList.remove('editing');
+      taskEditor.inert = true;
+      taskEditor.setAttribute('aria-hidden', 'true');
+      todoMainView.inert = false;
+      todoMainView.setAttribute('aria-hidden', 'false');
+      editorError.textContent = '';
+      editingTask = null;
+    }
+
+    document.getElementById('add-task').addEventListener('click', () => openTaskEditor(null));
+    document.getElementById('close-editor').addEventListener('click', closeTaskEditor);
+    document.getElementById('cancel-task').addEventListener('click', closeTaskEditor);
+
+    taskStart.addEventListener('change', () => {
+      taskEnd.min = taskStart.value;
+      if (taskEnd.value < taskStart.value) taskEnd.value = taskStart.value;
+    });
+    taskRepeat.addEventListener('change', () => weekdayField.classList.toggle('show', taskRepeat.value === 'weekly'));
+    reminderEnabled.addEventListener('change', async () => {
+      reminderTime.disabled = !reminderEnabled.checked;
+      if (reminderEnabled.checked) {
+        reminderTime.focus();
+        const permission = await ensureNotificationPermission();
+        if (permission !== 'granted') showToast('系统通知未授权，到点仍会显示页面内提醒');
+      }
+    });
+
+    function displayDate(value) {
+      return value.replaceAll('-', '.');
+    }
+
+    taskEditor.addEventListener('submit', async event => {
+      event.preventDefault();
+      const title = taskTitle.value.trim();
+      const start = taskStart.value;
+      const end = taskEnd.value;
+      const repeat = taskRepeat.value;
+      const weekDays = [...document.querySelectorAll('#weekday-field input:checked')].map(input => input.value);
+
+      if (!title) {
+        editorError.textContent = '请输入任务名称';
+        return taskTitle.focus();
+      }
+      if (!start || !end) {
+        editorError.textContent = '请选择开始日期和结束日期';
+        return;
+      }
+      if (end < start) {
+        editorError.textContent = '结束日期不能早于开始日期';
+        return taskEnd.focus();
+      }
+      if (repeat === 'weekly' && !weekDays.length) {
+        editorError.textContent = '请至少选择一个每周重复日';
+        return;
+      }
+
+      const notificationPermission = reminderEnabled.checked ? await ensureNotificationPermission() : 'disabled';
+
+      const taskToEdit = editingTask;
+      const data = {
+        id: taskToEdit?.dataset.taskId || `task-user-${Date.now()}`,
+        title,
+        start,
+        end,
+        repeat,
+        weekdays: weekDays,
+        reminderEnabled: reminderEnabled.checked,
+        reminderTime: reminderTime.value || '20:30',
+        custom: taskToEdit ? taskToEdit.dataset.custom === 'true' : true,
+      };
+
+      const task = taskToEdit || createTaskElement(data);
+      if (taskToEdit) {
+        renderTask(task, data);
+      } else {
+        document.getElementById('task-list').appendChild(task);
+        totalCount += 1;
+      }
+      persistTask(task);
+      updateProgress();
+      const savedMessage = taskToEdit ? '待办修改已保存' : (repeat === 'none' ? '待办已加入日期范围' : '周期待办已创建');
+      showToast(reminderEnabled.checked && notificationPermission !== 'granted' ? `${savedMessage}；将使用页面内提醒` : savedMessage);
+      taskEditor.reset();
+      taskStart.value = '2026-08-10';
+      taskEnd.value = '2026-08-10';
+      taskEnd.min = taskStart.value;
+      weekdayField.classList.remove('show');
+      reminderTime.disabled = true;
+      closeTaskEditor();
+      checkTaskReminders();
+    });
+
+    const reminderAlert = document.getElementById('reminder-alert');
+    const reminderAlertTitle = document.getElementById('reminder-alert-title');
+    const reminderAlertTime = document.getElementById('reminder-alert-time');
+    const reminderDismiss = document.getElementById('reminder-dismiss');
+    let activeReminderTask = null;
+    let lastSystemNotification = null;
+    let reminderAudioContext = null;
+    let firedReminderRecords = {};
+    try { firedReminderRecords = JSON.parse(localStorage.getItem('desk-fired-reminders') || '{}'); } catch (_) { firedReminderRecords = {}; }
+    firedReminderRecords = Object.fromEntries(Object.entries(firedReminderRecords).filter(([, firedAt]) => Date.now() - Number(firedAt) < 7776000000));
+    localStorage.setItem('desk-fired-reminders', JSON.stringify(firedReminderRecords));
+
+    async function ensureNotificationPermission() {
+      if (window.desktopBridge?.notify) return 'granted';
+      if (!('Notification' in window)) return 'unsupported';
+      try {
+        if (Notification.permission === 'default') return await Notification.requestPermission();
+        return Notification.permission;
+      } catch (_) {
+        return 'unsupported';
+      }
+    }
+
+    function localDateKey(date) {
+      const pad = value => String(value).padStart(2, '0');
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+
+    function taskOccursOnDate(data, date) {
+      const dateKey = localDateKey(date);
+      if (dateKey < data.start || dateKey > data.end) return false;
+      const startParts = data.start.split('-').map(Number);
+      if (data.repeat === 'none') return dateKey === data.start;
+      if (data.repeat === 'daily') return true;
+      if (data.repeat === 'weekdays') return date.getDay() >= 1 && date.getDay() <= 5;
+      if (data.repeat === 'weekly') return data.weekdays.includes(['日', '一', '二', '三', '四', '五', '六'][date.getDay()]);
+      if (data.repeat === 'monthly') return date.getDate() === startParts[2];
+      if (data.repeat === 'yearly') return date.getMonth() + 1 === startParts[1] && date.getDate() === startParts[2];
+      return false;
+    }
+
+    function playReminderTone() {
+      try {
+        const AudioEngine = window.AudioContext || window.webkitAudioContext;
+        if (!AudioEngine) return;
+        reminderAudioContext ||= new AudioEngine();
+        if (reminderAudioContext.state === 'suspended') reminderAudioContext.resume();
+        [0, .18, .36].forEach((delay, index) => {
+          const oscillator = reminderAudioContext.createOscillator();
+          const gain = reminderAudioContext.createGain();
+          oscillator.type = 'square';
+          oscillator.frequency.value = index === 1 ? 880 : 660;
+          gain.gain.setValueAtTime(.0001, reminderAudioContext.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(.12, reminderAudioContext.currentTime + delay + .015);
+          gain.gain.exponentialRampToValueAtTime(.0001, reminderAudioContext.currentTime + delay + .14);
+          oscillator.connect(gain).connect(reminderAudioContext.destination);
+          oscillator.start(reminderAudioContext.currentTime + delay);
+          oscillator.stop(reminderAudioContext.currentTime + delay + .15);
+        });
+      } catch (_) {}
+    }
+
+    function triggerTaskReminder(task, now, reminderKey) {
+      const title = task.querySelector('.task-copy strong').textContent;
+      activeReminderTask = task;
+      task.classList.add('reminding');
+      task.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      reminderAlertTitle.textContent = `待办提醒 · ${title}`;
+      reminderAlertTime.textContent = `${task.dataset.reminderTime} 到点了 · 点击“知道了”停止提醒`;
+      reminderAlert.classList.add('show');
+      playReminderTone();
+
+      if (window.desktopBridge?.notify) {
+        window.desktopBridge.notify('待办提醒', `${title} · ${task.dataset.reminderTime}`);
+      } else if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          lastSystemNotification = new Notification('待办提醒', {
+            body: `${title} · ${task.dataset.reminderTime}`,
+            tag: reminderKey,
+            requireInteraction: true,
+          });
+          lastSystemNotification.onclick = () => {
+            window.focus();
+            task.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          };
+        } catch (_) {}
+      }
+    }
+
+    function dismissTaskReminder(task = activeReminderTask) {
+      task?.classList.remove('reminding');
+      lastSystemNotification?.close?.();
+      lastSystemNotification = null;
+      const nextReminder = document.querySelector('#task-list .task.reminding');
+      if (nextReminder) {
+        activeReminderTask = nextReminder;
+        reminderAlertTitle.textContent = `待办提醒 · ${nextReminder.querySelector('.task-copy strong').textContent}`;
+        reminderAlertTime.textContent = `${nextReminder.dataset.reminderTime} 到点了 · 点击“知道了”停止提醒`;
+      } else {
+        activeReminderTask = null;
+        reminderAlert.classList.remove('show');
+      }
+    }
+
+    function checkTaskReminders(now = new Date()) {
+      const pad = value => String(value).padStart(2, '0');
+      const timeKey = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const dateKey = localDateKey(now);
+      document.querySelectorAll('#task-list .task:not(.completed)').forEach(task => {
+        const data = taskDataFromElement(task);
+        if (!data.reminderEnabled || data.reminderTime !== timeKey || !taskOccursOnDate(data, now)) return;
+        const reminderKey = `${data.id}|${dateKey}|${timeKey}`;
+        if (firedReminderRecords[reminderKey]) return;
+        firedReminderRecords[reminderKey] = now.getTime();
+        localStorage.setItem('desk-fired-reminders', JSON.stringify(firedReminderRecords));
+        triggerTaskReminder(task, now, reminderKey);
+      });
+    }
+
+    document.addEventListener('pointerdown', () => {
+      try {
+        const AudioEngine = window.AudioContext || window.webkitAudioContext;
+        if (AudioEngine) {
+          reminderAudioContext ||= new AudioEngine();
+          if (reminderAudioContext.state === 'suspended') reminderAudioContext.resume();
+        }
+      } catch (_) {}
+    }, { once: true });
+    reminderDismiss.addEventListener('click', () => dismissTaskReminder());
+    if (!embeddedWidget || embeddedWidget === 'todo') {
+      checkTaskReminders();
+      setInterval(checkTaskReminders, 5000);
+    }
+
+    const countdownWidget = document.querySelector('[data-widget="countdown"]');
+    const countdownMainView = document.getElementById('countdown-main-view');
+    const countdownEditor = document.getElementById('countdown-editor');
+    const countdownTitle = document.getElementById('countdown-title');
+    const countdownTarget = document.getElementById('countdown-target');
+    const countdownWarning = document.getElementById('countdown-warning');
+    const countdownError = document.getElementById('countdown-error');
+    const countdownList = document.getElementById('countdown-list');
+    let savedCountdowns = [];
+    let hiddenDefaultCountdowns = [];
+    let acknowledgedCountdowns = [];
+    try { savedCountdowns = JSON.parse(localStorage.getItem('desk-countdowns') || '[]'); } catch (_) { savedCountdowns = []; }
+    try { hiddenDefaultCountdowns = JSON.parse(localStorage.getItem('desk-hidden-countdowns') || '[]'); } catch (_) { hiddenDefaultCountdowns = []; }
+    try { acknowledgedCountdowns = JSON.parse(localStorage.getItem('desk-acknowledged-countdowns') || '[]'); } catch (_) { acknowledgedCountdowns = []; }
+    savedCountdowns = savedCountdowns.map((data, index) => ({ ...data, id: data.id || `countdown-user-legacy-${Date.now()}-${index}` }));
+    localStorage.setItem('desk-countdowns', JSON.stringify(savedCountdowns));
+    countdownList.querySelectorAll('[data-built-in="true"]').forEach(item => {
+      if (hiddenDefaultCountdowns.includes(item.dataset.countdownId)) item.remove();
+    });
+
+    function toLocalInputValue(date) {
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+
+    function warningLabel(minutes) {
+      const labels = { 15: '15 分钟', 60: '1 小时', 360: '6 小时', 1440: '1 天', 4320: '3 天', 10080: '7 天' };
+      return labels[minutes] || `${minutes} 分钟`;
+    }
+
+    function formatTarget(date) {
+      const pad = value => String(value).padStart(2, '0');
+      return `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function countdownParts(milliseconds) {
+      const seconds = Math.max(0, Math.floor(Math.abs(milliseconds) / 1000));
+      if (seconds >= 86400) return [Math.ceil(seconds / 86400), '天'];
+      if (seconds >= 3600) return [Math.ceil(seconds / 3600), '小时'];
+      if (seconds >= 60) return [Math.ceil(seconds / 60), '分钟'];
+      return [seconds, '秒'];
+    }
+
+    function countdownReminderStage(milliseconds) {
+      const hour = 3600000;
+      if (milliseconds <= 0 || milliseconds > 24 * hour) return null;
+      if (milliseconds > 16 * hour) return { id: '24h', number: 1, label: '24 小时' };
+      if (milliseconds > 8 * hour) return { id: '16h', number: 2, label: '16 小时' };
+      return { id: '8h', number: 3, label: '8 小时' };
+    }
+
+    function deadlineBurst(item) {
+      const rect = item.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const colors = ['var(--color-warning)', 'var(--p-orange-500)', 'var(--p-white)', 'var(--color-danger)'];
+      const shockwave = document.createElement('i');
+      shockwave.className = 'deadline-shockwave';
+      shockwave.style.left = `${centerX}px`;
+      shockwave.style.top = `${centerY}px`;
+      document.body.appendChild(shockwave);
+      setTimeout(() => shockwave.remove(), 800);
+
+      for (let index = 0; index < 38; index += 1) {
+        const particle = document.createElement('i');
+        const angle = Math.PI * 2 * index / 38 + (Math.random() - .5) * .22;
+        const distance = 70 + Math.random() * 120;
+        particle.className = 'deadline-particle';
+        particle.style.left = `${centerX}px`;
+        particle.style.top = `${centerY}px`;
+        particle.style.setProperty('--dx', `${Math.cos(angle) * distance}px`);
+        particle.style.setProperty('--dy', `${Math.sin(angle) * distance}px`);
+        particle.style.setProperty('--rot', `${Math.random() * 720 - 360}deg`);
+        particle.style.setProperty('--size', `${5 + Math.random() * 7}px`);
+        particle.style.setProperty('--blast-color', colors[index % colors.length]);
+        document.body.appendChild(particle);
+        setTimeout(() => particle.remove(), 1050);
+      }
+    }
+
+    function refreshCountdowns(now = Date.now()) {
+      countdownList.querySelectorAll('.countdown-item').forEach(item => {
+        const target = new Date(item.dataset.target);
+        const targetTime = target.getTime();
+        if (!Number.isFinite(targetTime)) return;
+        const remaining = targetTime - now;
+        const overdue = remaining <= 0;
+        const reminderStage = countdownReminderStage(remaining);
+        const urgent = Boolean(reminderStage);
+        const wasOverdue = item.classList.contains('overdue');
+        const previousStage = item.dataset.reminderStage || '';
+        const [amount, unit] = countdownParts(remaining);
+        const acknowledgementKey = reminderStage ? `${item.dataset.countdownId}|${item.dataset.target}|${reminderStage.id}` : '';
+        const acknowledged = urgent && acknowledgedCountdowns.includes(acknowledgementKey);
+
+        item.classList.toggle('urgent', urgent);
+        item.classList.toggle('overdue', overdue);
+        item.classList.toggle('acknowledged', acknowledged);
+        item.dataset.acknowledgementKey = acknowledgementKey;
+        item.dataset.reminderStage = reminderStage?.id || '';
+        item.querySelector('.countdown-status').textContent = overdue ? '!!! 已超时 !!!' : (urgent ? '紧急' : '正常');
+        const acknowledgeButton = item.querySelector('.countdown-ack');
+        acknowledgeButton.textContent = acknowledged ? '✓ 已安静' : '拍一下';
+        acknowledgeButton.disabled = acknowledged;
+        acknowledgeButton.setAttribute('aria-pressed', String(acknowledged));
+        item.querySelector('.countdown-value strong').textContent = overdue ? `+${amount}` : amount;
+        item.querySelector('.countdown-value span').textContent = unit;
+        item.querySelector('.countdown-date span:first-child').textContent = formatTarget(target);
+        item.querySelector('.countdown-date span:last-child').textContent = overdue ? '立即处理' : (urgent ? `第 ${reminderStage.number}/3 次 · ${reminderStage.label}提醒` : '24 小时内提醒 3 次');
+        item.setAttribute('aria-label', `${item.querySelector('.countdown-name').textContent}，${overdue ? '已超时' : urgent ? (acknowledged ? `第${reminderStage.number}次紧急提醒，本段已安静` : `第${reminderStage.number}次紧急提醒，点击拍一下`) : '正常'}`);
+        item.title = urgent ? (acknowledged ? `第 ${reminderStage.number}/3 次提醒已安静，下阶段会重新抖动` : '点击“拍一下”让本阶段安静') : '';
+
+        if (urgent && previousStage && previousStage !== reminderStage.id) {
+          showToast(`${item.querySelector('.countdown-name').textContent}：第 ${reminderStage.number}/3 次紧急提醒`);
+        }
+
+        if (overdue && !wasOverdue && item.dataset.blastReady === 'true') {
+          deadlineBurst(item);
+          showToast('倒计时已超时！立即处理');
+        }
+        item.dataset.blastReady = 'true';
+      });
+    }
+
+    function buildCountdownItem(data, animateIfOverdue = false) {
+      const item = document.createElement('article');
+      item.className = 'countdown-item';
+      item.dataset.countdownId = data.id;
+      item.dataset.builtIn = 'false';
+      item.dataset.target = data.target;
+      item.dataset.warningMinutes = String(data.warningMinutes);
+      item.dataset.blastReady = animateIfOverdue ? 'true' : 'false';
+      item.innerHTML = '<div class="countdown-top"><span class="countdown-name"></span><div class="countdown-actions"><span class="countdown-status">正常</span><button class="countdown-ack" type="button">拍一下</button><button class="countdown-delete" type="button" title="删除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></div></div><div class="countdown-value"><strong>—</strong><span></span></div><div class="countdown-date"><span></span><span></span></div><div class="countdown-rule"></div>';
+      item.querySelector('.countdown-name').textContent = data.title;
+      item.querySelector('.countdown-ack').setAttribute('aria-label', `拍一下，让${data.title}本次紧急提醒安静`);
+      item.querySelector('.countdown-delete').setAttribute('aria-label', `删除 ${data.title}倒计时`);
+      countdownList.appendChild(item);
+      return item;
+    }
+
+    function persistCountdowns() {
+      localStorage.setItem('desk-countdowns', JSON.stringify(savedCountdowns));
+    }
+
+    function persistHiddenCountdowns() {
+      localStorage.setItem('desk-hidden-countdowns', JSON.stringify(hiddenDefaultCountdowns));
+    }
+
+    function acknowledgeCountdown(item) {
+      if (!item?.classList.contains('urgent') || item.classList.contains('acknowledged')) return;
+      acknowledgedCountdowns = [...new Set([...acknowledgedCountdowns, item.dataset.acknowledgementKey])];
+      localStorage.setItem('desk-acknowledged-countdowns', JSON.stringify(acknowledgedCountdowns));
+      refreshCountdowns();
+      item.querySelector('.countdown-ack')?.focus();
+      showToast('本次提醒已安静；下一个八小时阶段会重新抖动');
+    }
+
+    function deleteCountdown(item) {
+      if (!item || item.classList.contains('removing')) return;
+      const id = item.dataset.countdownId;
+      const builtIn = item.dataset.builtIn === 'true';
+      const title = item.querySelector('.countdown-name').textContent;
+      const savedIndex = savedCountdowns.findIndex(data => data.id === id);
+      const data = builtIn ? null : savedCountdowns[savedIndex];
+      const nextSibling = item.nextElementSibling;
+
+      if (builtIn) {
+        hiddenDefaultCountdowns = [...new Set([...hiddenDefaultCountdowns, id])];
+        persistHiddenCountdowns();
+      } else if (savedIndex >= 0) {
+        savedCountdowns.splice(savedIndex, 1);
+        persistCountdowns();
+      }
+
+      item.classList.add('removing');
+      const removeTimer = setTimeout(() => item.remove(), 240);
+      lastDeletedCountdown = { item, id, builtIn, data, savedIndex, nextSibling, removeTimer };
+      showToast(`已删除「${title}」`, true, 'countdown');
+    }
+
+    function restoreDeletedCountdown() {
+      if (!lastDeletedCountdown) return;
+      const deletion = lastDeletedCountdown;
+      clearTimeout(deletion.removeTimer);
+      deletion.item.classList.remove('removing');
+      if (deletion.nextSibling && deletion.nextSibling.parentNode === countdownList) {
+        countdownList.insertBefore(deletion.item, deletion.nextSibling);
+      } else {
+        countdownList.appendChild(deletion.item);
+      }
+
+      if (deletion.builtIn) {
+        hiddenDefaultCountdowns = hiddenDefaultCountdowns.filter(id => id !== deletion.id);
+        persistHiddenCountdowns();
+      } else if (deletion.data) {
+        const restoreIndex = Math.min(Math.max(deletion.savedIndex, 0), savedCountdowns.length);
+        savedCountdowns.splice(restoreIndex, 0, deletion.data);
+        persistCountdowns();
+      }
+
+      refreshCountdowns();
+      deletion.item.querySelector('.countdown-delete')?.focus();
+      lastDeletedCountdown = null;
+    }
+
+    countdownList.addEventListener('click', event => {
+      const deleteButton = event.target.closest('.countdown-delete');
+      if (deleteButton) {
+        event.stopPropagation();
+        deleteCountdown(deleteButton.closest('.countdown-item'));
+        return;
+      }
+      const acknowledgeButton = event.target.closest('.countdown-ack');
+      if (!acknowledgeButton) return;
+      event.stopPropagation();
+      acknowledgeCountdown(acknowledgeButton.closest('.countdown-item'));
+    });
+
+    savedCountdowns.forEach(data => buildCountdownItem(data, false));
+
+    function openCountdownEditor() {
+      closeMenus();
+      closeTaskEditor();
+      countdownWidget.classList.add('editing');
+      countdownMainView.inert = true;
+      countdownMainView.setAttribute('aria-hidden', 'true');
+      countdownEditor.inert = false;
+      countdownEditor.setAttribute('aria-hidden', 'false');
+      countdownError.textContent = '';
+      countdownTarget.value = toLocalInputValue(new Date(Date.now() + 86400000));
+      setTimeout(() => countdownTitle.focus(), 240);
+    }
+
+    function closeCountdownEditor() {
+      countdownWidget.classList.remove('editing');
+      countdownEditor.inert = true;
+      countdownEditor.setAttribute('aria-hidden', 'true');
+      countdownMainView.inert = false;
+      countdownMainView.setAttribute('aria-hidden', 'false');
+      countdownError.textContent = '';
+    }
+
+    document.getElementById('add-countdown').addEventListener('click', openCountdownEditor);
+    document.getElementById('close-countdown-editor').addEventListener('click', closeCountdownEditor);
+    document.getElementById('cancel-countdown').addEventListener('click', closeCountdownEditor);
+
+    countdownEditor.addEventListener('submit', event => {
+      event.preventDefault();
+      const title = countdownTitle.value.trim();
+      const target = countdownTarget.value;
+      if (!title) {
+        countdownError.textContent = '请输入倒计时名称';
+        return countdownTitle.focus();
+      }
+      if (!target || !Number.isFinite(new Date(target).getTime())) {
+        countdownError.textContent = '请选择有效的截止时间';
+        return countdownTarget.focus();
+      }
+
+      const data = { id: `countdown-user-${Date.now()}`, title, target, warningMinutes: Number(countdownWarning.value) };
+      savedCountdowns.push(data);
+      persistCountdowns();
+      buildCountdownItem(data, true);
+      countdownEditor.reset();
+      closeCountdownEditor();
+      refreshCountdowns();
+      if (new Date(target).getTime() > Date.now()) showToast('倒计时已创建');
+    });
+
+    function updateTime() {
+      document.getElementById('live-time').textContent = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+      refreshCountdowns();
+    }
+    if (!embeddedWidget || embeddedWidget === 'countdown') {
+      updateTime();
+      setInterval(updateTime, 1000);
+    }
+
+    const fileGrid = document.getElementById('file-grid');
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const runtimeFiles = new Map();
+    let selectedFileItem = null;
+    let fileSequence = 0;
+    let hiddenDefaultFiles = [];
+    let savedNativeFilePaths = [];
+    try { hiddenDefaultFiles = JSON.parse(localStorage.getItem('desk-hidden-files') || '[]'); } catch (_) { hiddenDefaultFiles = []; }
+    try { savedNativeFilePaths = JSON.parse(localStorage.getItem('desk-native-file-paths') || '[]'); } catch (_) { savedNativeFilePaths = []; }
+    fileGrid.querySelectorAll('[data-built-in="true"]').forEach(item => {
+      if (hiddenDefaultFiles.includes(item.dataset.fileId)) item.remove();
+    });
+    fileGrid.querySelectorAll('.file-item').forEach(item => {
+      item.setAttribute('draggable', 'true');
+      item.setAttribute('aria-label', `${item.dataset.name}，双击打开`);
+      item.title = '双击打开 · Ctrl+C 复制';
+      if (item.dataset.builtIn === 'true') {
+        const copyButton = item.querySelector('.file-copy');
+        copyButton.classList.add('unlinked');
+        copyButton.title = '示例卡片尚未关联真实文件';
+        copyButton.setAttribute('aria-label', `${item.dataset.name}尚未关联真实文件`);
+      }
+    });
+
+    function refreshFileCount() {
+      document.getElementById('file-count').textContent = `${fileGrid.querySelectorAll('.file-item').length} ITEMS`;
+    }
+
+    function fileActionsMarkup() {
+      return '<span class="file-actions"><button class="file-action file-copy" type="button" title="复制"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11"/><path d="M16 8V5H5v11h3"/></svg></button><button class="file-action file-delete" type="button" title="删除"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg></button></span>';
+    }
+
+    function selectFileItem(item) {
+      selectedFileItem?.classList.remove('selected');
+      selectedFileItem = item;
+      item?.classList.add('selected');
+    }
+
+    function addFiles(fileList) {
+      [...fileList].forEach(file => {
+        const extension = (file.name.split('.').pop() || 'FILE').slice(0, 4).toUpperCase();
+        const id = `file-runtime-${Date.now()}-${fileSequence++}`;
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('draggable', 'true');
+        item.setAttribute('aria-label', `${file.name}，双击打开`);
+        item.title = '双击打开 · Ctrl+C 复制';
+        item.dataset.fileId = id;
+        item.dataset.builtIn = 'false';
+        item.dataset.name = file.name;
+        item.innerHTML = `<span class="file-type"></span><span class="file-name"></span>${fileActionsMarkup()}`;
+        item.querySelector('.file-type').textContent = extension;
+        item.querySelector('.file-name').textContent = file.name;
+        item.querySelector('.file-copy').setAttribute('aria-label', `复制 ${file.name}`);
+        item.querySelector('.file-copy').title = '复制文件本体';
+        item.querySelector('.file-delete').setAttribute('aria-label', `删除 ${file.name}`);
+        runtimeFiles.set(id, { file, path: file.path || '' });
+        fileGrid.appendChild(item);
+      });
+      refreshFileCount();
+      showToast(`已加入 ${fileList.length} 个项目`);
+    }
+
+    function addNativeFiles(paths, persist = true) {
+      const additions = [];
+      [...new Set(paths || [])].filter(Boolean).forEach(path => {
+        if ([...runtimeFiles.values()].some(record => record.path === path)) return;
+        const name = path.split(/[\\/]/).pop() || path;
+        const extension = (name.split('.').pop() || 'FILE').slice(0, 4).toUpperCase();
+        const id = `file-native-${Date.now()}-${fileSequence++}`;
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.tabIndex = 0;
+        item.setAttribute('role', 'button');
+        item.setAttribute('draggable', 'true');
+        item.setAttribute('aria-label', `${name}，双击打开`);
+        item.title = '双击打开 · Ctrl+C 复制文件';
+        item.dataset.fileId = id;
+        item.dataset.builtIn = 'false';
+        item.dataset.nativePath = 'true';
+        item.dataset.name = name;
+        item.innerHTML = `<span class="file-type"></span><span class="file-name"></span>${fileActionsMarkup()}`;
+        item.querySelector('.file-type').textContent = extension;
+        item.querySelector('.file-name').textContent = name;
+        item.querySelector('.file-copy').setAttribute('aria-label', `复制文件 ${name}`);
+        item.querySelector('.file-copy').title = '复制文件本体';
+        item.querySelector('.file-delete').setAttribute('aria-label', `删除 ${name}`);
+        runtimeFiles.set(id, { file: null, path });
+        fileGrid.appendChild(item);
+        additions.push(path);
+      });
+      if (persist && additions.length) {
+        savedNativeFilePaths = [...new Set([...savedNativeFilePaths, ...additions])];
+        localStorage.setItem('desk-native-file-paths', JSON.stringify(savedNativeFilePaths));
+      }
+      refreshFileCount();
+      if (additions.length) showToast(`已加入 ${additions.length} 个本地文件`);
+    }
+    window.addNativeFiles = addNativeFiles;
+    addNativeFiles(savedNativeFilePaths, false);
+
+    async function openFileItem(item) {
+      const record = runtimeFiles.get(item.dataset.fileId);
+      if (record?.path && window.desktopBridge?.openPath) {
+        await window.desktopBridge.openPath(record.path);
+        showToast(`正在打开：${item.dataset.name}`);
+        return;
+      }
+      if (!record?.file) {
+        showToast('这是展示卡片；拖入真实文件后即可双击打开');
+        return;
+      }
+      const objectUrl = URL.createObjectURL(record.file);
+      const opener = document.createElement('a');
+      opener.href = objectUrl;
+      opener.target = '_blank';
+      opener.rel = 'noopener noreferrer';
+      document.body.appendChild(opener);
+      opener.click();
+      opener.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+      showToast(`正在打开：${item.dataset.name}`);
+    }
+
+    async function copyFileItem(item) {
+      const record = runtimeFiles.get(item.dataset.fileId);
+      if (!record?.file && !record?.path) {
+        showToast('该示例卡片尚未关联真实文件；请先拖入本地文件');
+        return;
+      }
+      if (record?.path && window.desktopBridge?.copyFiles) {
+        try {
+          await window.desktopBridge.copyFiles([record.path]);
+          showToast('文件本体已复制，可到目标文件夹粘贴');
+          return;
+        } catch (_) {
+          showToast('系统文件剪贴板调用失败');
+          return;
+        }
+      }
+      showToast('浏览器不能把文件本体放入系统剪贴板；桌面版会调用系统文件复制接口');
+    }
+
+    function deleteFileItem(item) {
+      if (!item || item.classList.contains('removing')) return;
+      const id = item.dataset.fileId;
+      const builtIn = item.dataset.builtIn === 'true';
+      const record = runtimeFiles.get(id);
+      const nativePathIndex = record?.path ? savedNativeFilePaths.indexOf(record.path) : -1;
+      const nextSibling = item.nextElementSibling;
+      if (builtIn) {
+        hiddenDefaultFiles = [...new Set([...hiddenDefaultFiles, id])];
+        localStorage.setItem('desk-hidden-files', JSON.stringify(hiddenDefaultFiles));
+      }
+      if (selectedFileItem === item) selectedFileItem = null;
+      if (nativePathIndex >= 0) {
+        savedNativeFilePaths.splice(nativePathIndex, 1);
+        localStorage.setItem('desk-native-file-paths', JSON.stringify(savedNativeFilePaths));
+      }
+      item.classList.add('removing');
+      const removeTimer = setTimeout(() => {
+        item.remove();
+        refreshFileCount();
+      }, 220);
+      lastDeletedFile = { item, id, builtIn, record, nativePathIndex, nextSibling, removeTimer };
+      showToast(`已从收纳盒移除「${item.dataset.name}」`, true, 'file');
+    }
+
+    function restoreDeletedFile() {
+      if (!lastDeletedFile) return;
+      const deletion = lastDeletedFile;
+      clearTimeout(deletion.removeTimer);
+      deletion.item.classList.remove('removing');
+      if (deletion.nextSibling && deletion.nextSibling.parentNode === fileGrid) fileGrid.insertBefore(deletion.item, deletion.nextSibling);
+      else fileGrid.appendChild(deletion.item);
+      if (deletion.builtIn) {
+        hiddenDefaultFiles = hiddenDefaultFiles.filter(id => id !== deletion.id);
+        localStorage.setItem('desk-hidden-files', JSON.stringify(hiddenDefaultFiles));
+      }
+      if (deletion.record?.path && deletion.nativePathIndex >= 0) {
+        savedNativeFilePaths.splice(Math.min(deletion.nativePathIndex, savedNativeFilePaths.length), 0, deletion.record.path);
+        localStorage.setItem('desk-native-file-paths', JSON.stringify([...new Set(savedNativeFilePaths)]));
+      }
+      refreshFileCount();
+      selectFileItem(deletion.item);
+      deletion.item.focus();
+      lastDeletedFile = null;
+    }
+
+    dropZone.addEventListener('click', async () => {
+      if (window.desktopBridge?.chooseFiles) {
+        const paths = await window.desktopBridge.chooseFiles();
+        if (paths?.length) addNativeFiles(paths);
+        return;
+      }
+      fileInput.click();
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files.length) addFiles(fileInput.files); fileInput.value = ''; });
+    ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.add('dragover');
+      dropZone.textContent = '松开即可加入收纳盒';
+    }));
+    ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
+      event.preventDefault();
+      dropZone.classList.remove('dragover');
+      dropZone.textContent = '拖入文件建立快捷引用';
+      if (type === 'drop' && event.dataTransfer.files.length) addFiles(event.dataTransfer.files);
+    }));
+    fileGrid.addEventListener('click', async event => {
+      const item = event.target.closest('.file-item');
+      if (!item) return;
+      const action = event.target.closest('.file-action');
+      if (action?.classList.contains('file-copy')) return copyFileItem(item);
+      if (action?.classList.contains('file-delete')) return deleteFileItem(item);
+      selectFileItem(item);
+    });
+    fileGrid.addEventListener('dblclick', event => {
+      if (event.target.closest('.file-action')) return;
+      const item = event.target.closest('.file-item');
+      if (item) openFileItem(item);
+    });
+    fileGrid.addEventListener('keydown', event => {
+      const item = event.target.closest('.file-item');
+      if (!item) return;
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        openFileItem(item);
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+        event.preventDefault();
+        copyFileItem(item);
+      } else if (event.key === 'Delete') {
+        event.preventDefault();
+        deleteFileItem(item);
+      }
+    });
+    fileGrid.addEventListener('dragstart', event => {
+      const item = event.target.closest('.file-item');
+      if (!item) return;
+      const record = runtimeFiles.get(item.dataset.fileId);
+      event.dataTransfer.effectAllowed = 'copy';
+      event.dataTransfer.setData('text/plain', record?.path || item.dataset.name);
+      if (record?.file) {
+        try { event.dataTransfer.items.add(record.file); } catch (_) {}
+      }
+    });
+    refreshFileCount();
+  </script>
+</body>
+</html>

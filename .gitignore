@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv311/
+build/
+dist/
+
+# PyInstaller
+*.spec.bak
+desktop-organizer-dist/
+DeskFlow.spec
+
+# OS
+Thumbs.db
+Desktop.ini
