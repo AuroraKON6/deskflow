@@ -59,4 +59,43 @@ if ($LASTEXITCODE -ne 0) {
   throw "PyInstaller failed with exit code $LASTEXITCODE"
 }
 
+# Slim down the bundle: drop Qt pieces DeskFlow never uses.
+$Internal = Join-Path $OutputRoot 'DeskFlow\_internal'
+$QtRoot = Join-Path $Internal 'PySide6'
+$LocaleDir = Join-Path $QtRoot 'translations\qtwebengine_locales'
+$Removed = 0
+
+function Remove-Quiet([string]$Path) {
+  if (Test-Path $Path) {
+    Remove-Item $Path -Recurse -Force -ErrorAction SilentlyContinue
+    $script:Removed++
+  }
+}
+
+# PDF renderer pulled in by the WebEngine hook; unused by DeskFlow
+Remove-Quiet (Join-Path $QtRoot 'Qt6Pdf.dll')
+Remove-Quiet (Join-Path $QtRoot 'Qt6Pdf.pyd')
+
+# Software OpenGL fallback (20MB); hardware GPU is assumed
+Remove-Quiet (Join-Path $QtRoot 'opengl32sw.dll')
+
+# Chromium devtools + debug snapshot: not needed in a shipped app
+Remove-Quiet (Join-Path $QtRoot 'resources\qtwebengine_devtools_resources.pak')
+Remove-Quiet (Join-Path $QtRoot 'resources\v8_context_snapshot.debug.bin')
+
+# Keep only zh/en webengine locales (53 language packs -> 4, saves ~27MB)
+if (Test-Path $LocaleDir) {
+  Get-ChildItem $LocaleDir -Filter '*.pak' | Where-Object {
+    $_.Name -notmatch '^(zh|en)' -and $_.Name -notin @('zh-CN.pak', 'zh-TW.pak', 'en-GB.pak', 'en-US.pak')
+  } | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+
+# Keep only zh/en Qt translation files (saves ~5MB)
+Get-ChildItem $QtRoot -Recurse -Filter 'qt_*.qm' -ErrorAction SilentlyContinue | Where-Object {
+  $_.Name -notmatch '^qt_(zh|en)[_-]'
+} | Remove-Item -Force -ErrorAction SilentlyContinue
+
+$DistSize = (Get-ChildItem (Join-Path $OutputRoot 'DeskFlow') -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
+Write-Host ("Slimming removed {0} items; dist size now {1:N0} MB" -f $Removed, $DistSize)
+
 Write-Host "Portable app created at: $(Join-Path $OutputRoot 'DeskFlow\DeskFlow.exe')"
