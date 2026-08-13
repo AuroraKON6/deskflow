@@ -11,6 +11,9 @@ dist/
 desktop-organizer-dist/
 DeskFlow.spec
 
+# Release archives
+*.zip
+
 # OS
 Thumbs.db
 Desktop.ini
