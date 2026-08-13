@@ -629,6 +629,12 @@ class DesktopController:
 
 
 def main() -> int:
+    # single instance guard
+    kernel32 = ctypes.windll.kernel32
+    mutex = kernel32.CreateMutexW(None, False, "Local\\DeskFlow_v2")
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        ctypes.windll.user32.MessageBoxW(0, "DeskFlow 已在运行", APP_NAME, 0x40)
+        return 0
     Application.EnableVisualStyles()
     controller = DesktopController()
     controller.startup()
