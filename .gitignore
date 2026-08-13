@@ -20,3 +20,9 @@ data/
 # OS
 Thumbs.db
 Desktop.ini
+
+# v2 project
+deskflow-v2/.venv/
+deskflow-v2/*.log
+deskflow-v2/build/
+deskflow-v2/dist/
