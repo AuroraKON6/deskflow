@@ -122,3 +122,21 @@ csc.exe(Windows 自带)编译,零第三方运行时。
 - 内存上限:WebView2 Chromium ~476MB 固有,无法再降(除非放弃 HTML 渲染)
 - C# 5 语法限制(csc 4.8):无 ?./$""/表达式体,已规避
 - 踩坑:AllowExternalDrop 在 WinForms 控件属性上,不在 CoreWebView2
+
+## Phase 3c — 内存优化(2026-08-13)
+
+用户要求再压内存。实测 WebView2 进程分解:
+- BROWSER 138MB + GPU 135MB + 2×renderer 65MB + utility 54MB + crashpad 19MB
+
+有效优化(写入 v3 main.cs 的 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS):
+- `--disable-gpu`:GPU 进程 135MB → 45MB 软件渲染(省 ~90MB,视觉无损,MiMo 确认)
+- `--disable-crashpad` / `--disable-background-networking` / `--disable-sync` /
+  `--disable-component-update` / `--no-first-run` / `--no-default-browser-check`
+- `--disable-features=msSmartScreenProtection`
+- `--js-flags=--max-old-space-size=96`(限制 V8 堆)
+
+实测:总内存 516MB → **429MB**(省 87MB)。
+无效尝试:`CoreWebView2.TrySuspendAsync()` 挂起隐藏窗口**不释放 WorkingSet**(仅暂停渲染进程工作),已移除。
+
+结论:内存已到 WebView2 极限 —— 剩余 371MB 是 Chromium 浏览器+2 渲染进程固有;
+再降只能放弃 HTML 渲染(换 QML/原生 Qt,需重写视觉)。
