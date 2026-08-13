@@ -73,3 +73,34 @@ RAM 大头是 Chromium 内核;WebView2 路线后,宿主 DLL 全部走系统(不�
 
 1. 旧数据要不要迁(要 → 老版本出 v1.0.1 加导出按钮;不要 → 直接开工)
 2. 确认开工时机(可随时)
+
+## Phase 0-3 实测结果(2026-08-13)
+
+### 目标达成
+- **zip 17.0MB**(v1 109.6MB → 降 84%),目标 <50MB 大幅达成
+- dist 30.3MB(v1 250MB → 降 88%)
+- 设计/功能/架构不变:同一份 index.html,WebView2 渲染
+
+### 验证项
+- WebView2 渲染 index.html:MiMo 视觉确认纸色卡片/圆角/列表内容正确
+- 透明无边框窗口:WS_EX_NOREDIRECTIONBITMAP + DefaultBackgroundColor
+- 桥接 14 方法:注入 shim → chrome.webview.postMessage → host 分发(实测 resize/drag/resize 全通)
+- 拖拽/边缘缩放:WM_NCLBUTTONDOWN + HT* 码(实测通过)
+- 数据迁移:读旧版注册表键,位置/尺寸精确还原
+- 启动器对话框 + 托盘 + 单实例互斥锁
+- DPI:--force-device-scale-factor + CSS↔物理换算
+
+### 内存实测(诚实记录)
+- v1 QtWebEngine:~436MB(DeskFlow 295 + WebView 141)
+- v2 WebView2:~594MB(DeskFlow 122 + WebView2 7 进程 471)
+- 结论:体积大幅缩小,但内存没有降 —— WebView2 同是 Chromium,进程模型更分散。
+  计划中"内存降 10 倍"预估错误。若内存是硬需求,需 C#(.NET Framework)壳,
+  但那是另一次重写,且 zip 仍需 ~20-30MB。
+
+### 关键技术踩坑
+1. pythonnet `Application.Run(form)` 重载解析错误 → 先 form.Show() 再 Run()
+2. UI 线程 CreateAsync().Result 阻塞 → WebView2 不初始化 → 改用环境变量
+   (WEBVIEW2_USER_DATA_FOLDER + WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS)
+3. WinForms DPI-aware 下坐标是物理像素,必须乘/除 dpi_scale()
+4. `.venv\Scripts\python.exe` 是启动器,会派生子进程(正常行为,勿误判双实例)
+5. PyInstaller 打包:--add-data 放 webview2lib DLL + WebView2Loader.dll
