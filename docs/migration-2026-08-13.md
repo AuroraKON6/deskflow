@@ -15,3 +15,9 @@
 ## 注意
 
 - 用户数据仍在 `%APPDATA%\DeskFlow`(注册表 HKCU\Software\DeskFlow),不在项目目录,迁移不受影响
+
+## 数据导出(2026-08-13,为 WebView2 迁移准备)
+
+`desktop-organizer-app\export_data.py` 导出结果 → `E:\DeskFlow\data\deskflow-data-export.json`(gitignore)。
+
+**重要发现**:localStorage 只有 2 个键且值均为空(`desk-countdowns=[]`、`desk-fired-reminders={}`),无待办/文件收纳键。即用户从未正式录入过数据 —— 迁移只需处理注册表窗口设置(位置/尺寸/manual 标记/enabledModules/autoStart),无 localStorage 数据需要导入。WebView2 版把注册表设置映射为 settings.json 即可。

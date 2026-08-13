@@ -14,6 +14,9 @@ DeskFlow.spec
 # Release archives
 *.zip
 
+# User data exports
+data/
+
 # OS
 Thumbs.db
 Desktop.ini
