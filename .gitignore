@@ -26,3 +26,7 @@ deskflow-v2/.venv/
 deskflow-v2/*.log
 deskflow-v2/build/
 deskflow-v2/dist/
+
+# v3 C# project
+deskflow-v3/dist/
+deskflow-v3/*.exe
