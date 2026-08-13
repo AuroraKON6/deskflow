@@ -213,19 +213,23 @@ namespace DeskFlow
             return new Point(Math.Max(area.Left + 24, right - w - 470), Math.Max(area.Top + 30, bottom - h - 36));
         }
 
+        const int WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_NOREDIRECTIONBITMAP;
+                return cp;
+            }
+        }
+
         void OnShown(object sender, EventArgs e)
         {
-            IntPtr hwnd = Handle;
-            const int GWL_EXSTYLE = -20;
-            const int WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
-            int style = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, style | WS_EX_NOREDIRECTIONBITMAP);
             ready = true;
             try { web.EnsureCoreWebView2Async(null); }
             catch { }
         }
-        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
-        [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr h, int idx, int val);
 
         void OnWv2Init(object sender, CoreWebView2InitializationCompletedEventArgs e)
         {
@@ -485,7 +489,6 @@ namespace DeskFlow
             double s = WidgetForm_Helper.Scale();
             if (Math.Abs(s - 1.0) > 0.01) flags.Add("--force-device-scale-factor=" + s.ToString("0.00"));
             // memory: drop GPU process, crashpad, background networking (widget app needs none of them)
-            flags.Add("--disable-gpu");
             flags.Add("--disable-crashpad");
             flags.Add("--disable-background-networking");
             flags.Add("--disable-sync");
