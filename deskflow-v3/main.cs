@@ -143,6 +143,21 @@ namespace DeskFlow
 })();";
     }
 
+    static class AppIcon
+    {
+        public static readonly Icon Instance = Load();
+        static Icon Load()
+        {
+            try
+            {
+                string path = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "app.ico");
+                if (File.Exists(path)) return new Icon(path); // 多尺寸 ico,按系统 DPI 取最佳帧
+            }
+            catch { }
+            return SystemIcons.Application;
+        }
+    }
+
     public class WidgetForm : Form
     {
         const uint WM_NCLBUTTONDOWN = 0x00A1;
@@ -167,6 +182,7 @@ namespace DeskFlow
             BackColor = Color.Black;
             TopMost = isSettings; // 组件默认不置顶;桌面钉住时永远在程序窗口下面
             ShowInTaskbar = false;
+            Icon = AppIcon.Instance;
             Text = Settings.AppName + " · " + Controller.ModuleTitle(widgetName);
             pinned = !isSettings && Settings.Get("widgetPinned/" + widgetName) != "false";
 
@@ -630,7 +646,7 @@ namespace DeskFlow
             menu.Items.Add(quit);
 
             tray = new NotifyIcon();
-            tray.Icon = SystemIcons.Application;
+            tray.Icon = AppIcon.Instance;
             tray.Text = Settings.AppName;
             tray.ContextMenuStrip = menu;
             tray.Visible = true;

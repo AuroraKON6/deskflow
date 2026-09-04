@@ -18,14 +18,15 @@ foreach ($r in $refs) { $refArgs += "/reference:$r" }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-& $Csc /nologo /target:winexe /platform:anycpu /optimize+ /out:"$OutDir\DeskFlow.exe" @refArgs "$PSScriptRoot\main.cs" | Out-String | Write-Host
+& $Csc /nologo /target:winexe /platform:anycpu /optimize+ /win32icon:"$PSScriptRoot\app.ico" /out:"$OutDir\DeskFlow.exe" @refArgs "$PSScriptRoot\main.cs" | Out-String | Write-Host
 if ($LASTEXITCODE -ne 0) { throw "csc failed: $LASTEXITCODE" }
 
-# deploy WebView2 SDK + loader + concepts
+# deploy WebView2 SDK + loader + concepts + app icon
 Copy-Item "$WV2Lib\Microsoft.Web.WebView2.Core.dll" $OutDir -Force
 Copy-Item "$WV2Lib\Microsoft.Web.WebView2.WinForms.dll" $OutDir -Force
 Copy-Item "$WV2Lib\runtimes\win-x64\native\WebView2Loader.dll" $OutDir -Force
 Copy-Item $Concepts $OutDir -Recurse -Force
+Copy-Item "$PSScriptRoot\app.ico" $OutDir -Force
 
 $DistSize = (Get-ChildItem $OutDir -Recurse -File | Measure-Object Length -Sum).Sum / 1MB
 Write-Host "v3 built at: $OutDir\DeskFlow.exe ($([math]::Round($DistSize, 2)) MB)"

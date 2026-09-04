@@ -48,6 +48,8 @@ cd desktop-organizer-app
 - 2026-09-04:修复 v3 从设置/托盘关闭模块时窗口不隐藏(`TryGetValue` 只在 visible 分支执行,移植自 v2 时引入)
 - 2026-09-04:启动黑框与三页面黑边的根因是 v2 —— python.exe 控制台宿主 + `WS_EX_NOREDIRECTIONBITMAP` 在窗口显示后才设置且未生效;v3(CreateParams 提前设置 + GUI 子系统)两者皆无,v2 自启命令也已改用 pythonw.exe 兜底
 - 2026-09-04:**桌面钉住模式** —— 组件窗口 SetParent 到桌面层(Progman,失败时发 0x052C 生成 WorkerW,每进程只试一次),默认开启、状态持久化;原「置顶窗口」图钉按钮语义改为「桌面固定」;explorer 重启后自动重挂
+- 2026-09-05:桌面钉住改用 z 序方案(SetParent 会让 WebView2 走子窗口渲染路径、alpha 失效发黑),并修复 `GetWindowW` 入口点崩溃
+- 2026-09-05:程序图标 —— 「序」纸片卡片(墨色圆角底 + 珊瑚橙硬阴影),嵌入 exe 并用于托盘/Alt-Tab
 
 ## 许可
 
