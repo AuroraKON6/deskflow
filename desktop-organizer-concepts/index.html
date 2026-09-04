@@ -715,7 +715,7 @@
     .file-copy.unlinked { border-style: dashed; opacity: .38; }
     .file-copy.unlinked:hover, .file-copy.unlinked:focus-visible { color: var(--color-text); background: var(--surface-light); transform: none; }
     .file-type { width: 29px; height: 35px; display: grid; place-items: end center; padding-bottom: 5px; border: 1px solid var(--color-line); background: var(--surface-light); font: 800 7px/1 var(--font-mono); }
-    .file-name { margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+    .file-name { margin-top: 7px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; font-size: 9px; line-height: 1.4; min-height: calc(9px * 1.4 * 2); }
     @keyframes file-remove { to { opacity: 0; transform: scale(.84) rotate(-3deg); } }
     .drop-zone {
       height: 42px;
@@ -2366,6 +2366,7 @@
         item.innerHTML = `<span class="file-type"></span><span class="file-name"></span>${fileActionsMarkup()}`;
         item.querySelector('.file-type').textContent = extension;
         item.querySelector('.file-name').textContent = file.name;
+        item.title = file.name;
         item.querySelector('.file-copy').setAttribute('aria-label', `复制 ${file.name}`);
         item.querySelector('.file-copy').title = '复制文件本体';
         item.querySelector('.file-delete').setAttribute('aria-label', `删除 ${file.name}`);
@@ -2397,6 +2398,7 @@
         item.innerHTML = `<span class="file-type"></span><span class="file-name"></span>${fileActionsMarkup()}`;
         item.querySelector('.file-type').textContent = extension;
         item.querySelector('.file-name').textContent = name;
+        item.title = name;
         item.querySelector('.file-copy').setAttribute('aria-label', `复制文件 ${name}`);
         item.querySelector('.file-copy').title = '复制文件本体';
         item.querySelector('.file-delete').setAttribute('aria-label', `删除 ${name}`);
@@ -2411,6 +2413,7 @@
       refreshFileCount();
       if (additions.length) showToast(`已加入 ${additions.length} 个本地文件`);
     }
+    document.querySelectorAll('#file-grid .file-item').forEach(item => { item.title = item.dataset.name || item.querySelector('.file-name')?.textContent || ''; });
     window.addNativeFiles = addNativeFiles;
     addNativeFiles(savedNativeFilePaths, false);
 
