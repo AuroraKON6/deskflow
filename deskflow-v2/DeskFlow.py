@@ -605,7 +605,11 @@ class DesktopController:
         if getattr(sys, "frozen", False):
             command = f'"{Path(sys.executable).resolve()}"'
         else:
-            command = f'"{Path(sys.executable).resolve()}" "{Path(__file__).resolve()}"'
+            # python.exe pops a console window at startup; pythonw.exe is the windowless host
+            exe = Path(sys.executable).resolve()
+            if exe.name.lower() == "python.exe":
+                exe = exe.with_name("pythonw.exe")
+            command = f'"{exe}" "{Path(__file__).resolve()}"'
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
                 if enabled:
