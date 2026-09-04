@@ -1,5 +1,7 @@
 # DeskFlow · 序 · 桌面效率工具
 
+<img src="docs/images/hero.png" width="270" align="right" alt="三个组件钉在桌面上" />
+
 > 三个住在你桌面上的小卡片。
 > 一个钉住拖延,一个盯着 Deadline,一个把杂物码得整整齐齐。
 
@@ -9,30 +11,36 @@
 - **倒计时** — 给重要日子上发条。24 / 16 / 8 小时三档紧急提醒,越接近 Deadline 它越红。
 - **文件收纳** — 把文件拖到卡片上,它就记住位置。下次想找,点一下,文件自己打开。
 
-每个模块都是一个独立的透明悬浮小窗口:可以拖、可以缩放、可以折叠成三层书页塞到角落。关掉不是退出,它们会缩回系统托盘继续替你盯着时间。
+每个模块都是一个**钉在桌面上的独立透明小窗口**:位于壁纸和图标之上、所有程序窗口之下——开程序、拖文件,它们都乖乖贴在桌面给你看着。可以拖、可以缩放、可以折叠成三层书页塞到角落;位置和尺寸都会被记住,下次启动原位回来。
+
+<p align="center">
+  <img src="docs/images/settings.png" width="460" alt="设置面板:总开关 + 模块开关 + 开机自启" />
+</p>
 
 ## 为什么是这个样子
 
-界面是一份单文件 HTML(`desktop-organizer-concepts/index.html`),带完整的设计系统:纸质感配色、硬阴影、折页动画、粒子特效。Python 外壳(PySide6 + QtWebEngine)只负责把每个模块变成一个真正的 Windows 窗口 —— 拖动、缩放、托盘、开机自启,都是原生能力。
+界面是一份单文件 HTML(`desktop-organizer-concepts/index.html`),带完整的设计系统:纸质感配色、硬阴影、折页动画、粒子特效。外壳(v3,C# WinForms + WebView2)只负责把每个模块变成一个真正的 Windows 窗口 —— 桌面钉住、拖动、缩放、托盘、开机自启,都是原生能力,整个程序只有 ~4MB。
 
 ## 目录
 
-- `desktop-organizer-app/` — Python 外壳源码、构建脚本
+- `desktop-organizer-app/` — v1 外壳(PySide6,已退役)
+- `deskflow-v2/` — v2 外壳(Python + WebView2,已退役)
+- `deskflow-v3/` — **v3 外壳(C#,当前版本)**:源码、构建脚本、图标
 - `desktop-organizer-concepts/` — 界面层(HTML + 概念渲染脚本)
-- 构建产物在 Releases,不在仓库里
+- `docs/images/` — README 展示图
 
 ## 构建
 
 ```powershell
-cd desktop-organizer-app
+cd deskflow-v3
 .\build.ps1
 ```
 
-产物在 `desktop-organizer-dist\DeskFlow\DeskFlow.exe`。构建脚本排除了 33 个用不到的 PySide6 模块,构建后再清掉 QtPdf / 软件渲染回退 / 49 种语言包,dist 从 408MB 瘦到 250MB,zip 约 110MB。
+产物在 `deskflow-v3\dist\DeskFlow\`,整个目录 ~4MB:一个 3.4MB 的 exe + WebView2 加载器 + 界面 HTML。需要系统装有 WebView2 Runtime(Win11 自带)。
 
 ## 使用
 
-- 双击 exe,首次启动弹「桌面组件选择」,勾哪个,哪个就上桌
+- 双击 exe,首次启动弹设置面板,拨动开关,勾哪个,哪个就上桌
 - 组件默认**钉在桌面上**:位于壁纸和图标之上、所有程序窗口之下,开程序/拖文件都会盖在它上面(Win+D 显示桌面时也一直在)
 - 拖标题栏移动,拖边缘缩放;位置和尺寸自动记忆,下次启动原位恢复
 - 标题栏图钉按钮 = 桌面固定开关(默认开);关掉后是普通浮动窗口
