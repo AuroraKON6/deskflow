@@ -33,8 +33,11 @@ cd desktop-organizer-app
 ## 使用
 
 - 双击 exe,首次启动弹「桌面组件选择」,勾哪个,哪个就上桌
-- 拖标题栏移动,拖边缘缩放;右上角菜单可折叠 / 紧凑 / 回原位
-- 托盘图标常驻:切换模块、改开机自启、彻底退出
+- 组件默认**钉在桌面上**:位于壁纸和图标之上、所有程序窗口之下,开程序/拖文件都会盖在它上面(Win+D 显示桌面时也一直在)
+- 拖标题栏移动,拖边缘缩放;位置和尺寸自动记忆,下次启动原位恢复
+- 标题栏图钉按钮 = 桌面固定开关(默认开);关掉后是普通浮动窗口
+- 右上角菜单可折叠 / 紧凑 / 回原位 / 打开设置
+- 托盘图标常驻:「设置…」开关模块和开机自启,「彻底退出」
 - 数据存在 `%APPDATA%\DeskFlow`
 
 ## 修复记录
@@ -44,6 +47,7 @@ cd desktop-organizer-app
 - 2026-09-04:修复 v3 桥接参数丢失(JavaScriptSerializer 把嵌套数组反序列化为 `Collection<object>`,`is object[]` 判断失败导致 resizeWindow / setEnabledModules / copyFiles 全部按空参数执行)
 - 2026-09-04:修复 v3 从设置/托盘关闭模块时窗口不隐藏(`TryGetValue` 只在 visible 分支执行,移植自 v2 时引入)
 - 2026-09-04:启动黑框与三页面黑边的根因是 v2 —— python.exe 控制台宿主 + `WS_EX_NOREDIRECTIONBITMAP` 在窗口显示后才设置且未生效;v3(CreateParams 提前设置 + GUI 子系统)两者皆无,v2 自启命令也已改用 pythonw.exe 兜底
+- 2026-09-04:**桌面钉住模式** —— 组件窗口 SetParent 到桌面层(Progman,失败时发 0x052C 生成 WorkerW,每进程只试一次),默认开启、状态持久化;原「置顶窗口」图钉按钮语义改为「桌面固定」;explorer 重启后自动重挂
 
 ## 许可
 

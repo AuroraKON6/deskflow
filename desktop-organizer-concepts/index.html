@@ -952,7 +952,7 @@
         <span class="drag-grip" aria-hidden="true"></span>
         <div class="header-copy"><h1>今日待办</h1><p>TO-DO · MON 10 AUG</p></div>
         <div class="header-actions">
-          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+          <button class="icon-button pin-button" type="button" aria-label="桌面固定" title="桌面固定">
             <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
           </button>
           <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
@@ -1056,7 +1056,7 @@
         <span class="drag-grip" aria-hidden="true"></span>
         <div class="header-copy"><h1>倒计时</h1><p>COUNTDOWN</p></div>
         <div class="header-actions">
-          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+          <button class="icon-button pin-button" type="button" aria-label="桌面固定" title="桌面固定">
             <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
           </button>
           <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
@@ -1121,7 +1121,7 @@
         <span class="drag-grip" aria-hidden="true"></span>
         <div class="header-copy"><h1>文件收纳</h1><p>QUICK SHELF</p></div>
         <div class="header-actions">
-          <button class="icon-button pin-button" type="button" aria-label="置顶窗口" title="置顶窗口">
+          <button class="icon-button pin-button" type="button" aria-label="桌面固定" title="桌面固定">
             <svg viewBox="0 0 24 24"><path d="m9 4 6 0-1 6 3 3H7l3-3-1-6Z"/><path d="M12 13v7"/></svg>
           </button>
           <button class="icon-button menu-button" type="button" aria-label="打开窗口菜单" title="窗口菜单">
@@ -1205,6 +1205,8 @@
           beginResize: edgeMask => native.beginResize(edgeMask),
           setManualSize: enabled => native.setManualSize(enabled),
           setAlwaysOnTop: enabled => native.setAlwaysOnTop(enabled),
+          setDesktopPin: enabled => callNative('setDesktopPin', enabled),
+          getWidgetState: () => callNative('getWidgetState'),
           resizeWindow: (width, height) => native.resizeWindow(width, height),
           resetPosition: () => native.resetPosition(),
           hideWindow: () => native.hideWindow(),
@@ -1460,16 +1462,26 @@
         } catch (_) {}
       }
 
+      const applyPinState = pinnedState => {
+        widget.classList.toggle('pinned', pinnedState);
+        pinButton.classList.toggle('active', pinnedState);
+        pinButton.setAttribute('aria-pressed', String(pinnedState));
+        pinButton.title = pinnedState ? '取消桌面固定' : '桌面固定';
+        pinButton.setAttribute('aria-label', pinButton.title);
+        widget.style.zIndex = pinnedState ? 50 + index : 2 + index;
+      };
       pinButton.addEventListener('click', event => {
         event.stopPropagation();
-        const pinned = widget.classList.toggle('pinned');
-        pinButton.classList.toggle('active', pinned);
-        pinButton.setAttribute('aria-pressed', String(pinned));
-        pinButton.title = pinned ? '取消置顶' : '置顶窗口';
-        widget.style.zIndex = pinned ? 50 + index : 2 + index;
-        if (embeddedWidget === name) window.desktopBridge?.setAlwaysOnTop?.(pinned);
-        showToast(pinned ? `${widget.getAttribute('aria-label')}已置顶` : '已取消置顶');
+        const pinnedState = !widget.classList.contains('pinned');
+        applyPinState(pinnedState);
+        if (embeddedWidget === name) window.desktopBridge?.setDesktopPin?.(pinnedState);
+        showToast(pinnedState ? '已固定到桌面，程序窗口会盖在它上面' : '已取消桌面固定');
       });
+      if (embeddedWidget === name && window.desktopBridge?.getWidgetState) {
+        window.desktopBridge.getWidgetState().then(state => {
+          if (state && typeof state.pinned === 'boolean') applyPinState(state.pinned);
+        }).catch(() => {});
+      }
 
       menuButton.addEventListener('click', event => {
         event.stopPropagation();

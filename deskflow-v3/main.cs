@@ -25,6 +25,67 @@ namespace DeskFlow
         [DllImport("kernel32.dll")] public static extern IntPtr CreateMutexW(IntPtr attrs, bool initialOwner, string name);
         [DllImport("kernel32.dll")] public static extern uint GetLastError();
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowW(string cls, string title);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string title);
+        [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
+        [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr hwnd);
+        [DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr hwnd, int index);
+        [DllImport("user32.dll")] public static extern int SetWindowLongW(IntPtr hwnd, int index, int value);
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+        [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
+
+        public const int GWL_STYLE = -16;
+        public const long WS_CHILD = 0x40000000L;
+        public const long WS_POPUP = 0x80000000L;
+        public const uint SWP_NOZORDER = 0x0004;
+        public const uint SWP_FRAMECHANGED = 0x0020;
+        public const uint SWP_NOACTIVATE = 0x0010;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct RECT { public int Left, Top, Right, Bottom; }
+    }
+
+    // 桌面层宿主(Progman/WorkerW):把窗口 SetParent 到这里 = 钉在桌面上,
+    // 位于壁纸与桌面图标之上、所有普通程序窗口之下(Rainmeter「On Desktop」同款方案)。
+    static class DesktopShell
+    {
+        static bool spawnAttempted; // 0x052C 每进程只发一次,避免反复生成无用 WorkerW
+
+        public static IntPtr FindHost()
+        {
+            IntPtr host = FindWorkerBehindIcons();
+            if (host != IntPtr.Zero) return host;
+            IntPtr progman = Native.FindWindowW("Progman", null);
+            if (progman == IntPtr.Zero) return IntPtr.Zero;
+            if (!spawnAttempted)
+            {
+                spawnAttempted = true;
+                Native.SendMessageW(progman, 0x052C, IntPtr.Zero, IntPtr.Zero); // 让 shell 在图标层后面生成 WorkerW
+                host = FindWorkerBehindIcons();
+                if (host != IntPtr.Zero) return host;
+            }
+            return progman; // 兜底:直接挂 Progman(此时会盖住图标层)
+        }
+
+        static IntPtr FindWorkerBehindIcons()
+        {
+            IntPtr worker = IntPtr.Zero, defViewHolder = IntPtr.Zero;
+            while ((worker = Native.FindWindowExW(IntPtr.Zero, worker, "WorkerW", null)) != IntPtr.Zero)
+            {
+                if (Native.FindWindowExW(worker, IntPtr.Zero, "SHELLDLL_DefView", null) != IntPtr.Zero)
+                {
+                    defViewHolder = worker;
+                    break;
+                }
+            }
+            if (defViewHolder != IntPtr.Zero)
+            {
+                IntPtr behind = Native.FindWindowExW(IntPtr.Zero, defViewHolder, "WorkerW", null);
+                if (behind != IntPtr.Zero) return behind;
+            }
+            return IntPtr.Zero;
+        }
     }
 
     static class Settings
@@ -122,6 +183,8 @@ namespace DeskFlow
     beginResize: function (m) { return call('beginResize', m); },
     setManualSize: function (e) { return call('setManualSize', e); },
     setAlwaysOnTop: function (e) { return call('setAlwaysOnTop', e); },
+    setDesktopPin: function (e) { return call('setDesktopPin', e); },
+    getWidgetState: function () { return call('getWidgetState'); },
     resizeWindow: function (w, h) { return call('resizeWindow', w, h); },
     resetPosition: function () { return call('resetPosition'); },
     hideWindow: function () { return call('hideWindow'); },
@@ -142,6 +205,7 @@ namespace DeskFlow
 
         readonly string name;
         bool manualSize;
+        bool pinned;
         bool ready;
         WebView2 web;
 
@@ -152,9 +216,10 @@ namespace DeskFlow
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.Black;
-            TopMost = true;
+            TopMost = isSettings; // 组件默认不置顶;桌面钉住时永远在程序窗口下面
             ShowInTaskbar = false;
             Text = Settings.AppName + " · " + Controller.ModuleTitle(widgetName);
+            pinned = !isSettings && Settings.Get("widgetPinned/" + widgetName) != "false";
 
             double s = DpiScale();
             manualSize = !isSettings && "true" == Settings.Get("widgetManualSize/" + widgetName);
@@ -235,8 +300,71 @@ namespace DeskFlow
         void OnShown(object sender, EventArgs e)
         {
             ready = true;
+            ApplyDesktopPin();
             try { web.EnsureCoreWebView2Async(null); }
             catch { }
+        }
+
+        // ---- 桌面钉住 ----
+        static readonly uint TaskbarCreatedMsg = Native.RegisterWindowMessageW("TaskbarCreated");
+
+        void ApplyDesktopPin()
+        {
+            if (name == "settings") return;
+            if (pinned) AttachToDesktop(); else DetachFromDesktop();
+        }
+
+        void AttachToDesktop()
+        {
+            if (Handle == IntPtr.Zero || Native.GetParent(Handle) != IntPtr.Zero) return;
+            IntPtr host = DesktopShell.FindHost();
+            if (host == IntPtr.Zero) return;
+            TopMost = false;
+            Native.RECT r;
+            Native.GetWindowRect(Handle, out r);
+            int style = Native.GetWindowLongW(Handle, Native.GWL_STYLE);
+            Native.SetWindowLongW(Handle, Native.GWL_STYLE, (int)((style | Native.WS_CHILD) & ~Native.WS_POPUP));
+            Native.SetParent(Handle, host);
+            // 换父后坐标按宿主客户区解释;宿主铺满主屏且原点为 0,0,显式摆回原屏幕位置
+            Native.SetWindowPos(Handle, IntPtr.Zero, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
+                Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED | Native.SWP_NOACTIVATE);
+        }
+
+        public void DetachFromDesktop()
+        {
+            if (Handle == IntPtr.Zero || Native.GetParent(Handle) == IntPtr.Zero) return;
+            Native.RECT r;
+            Native.GetWindowRect(Handle, out r);
+            Native.SetParent(Handle, IntPtr.Zero);
+            int style = Native.GetWindowLongW(Handle, Native.GWL_STYLE);
+            Native.SetWindowLongW(Handle, Native.GWL_STYLE, (int)((style & ~Native.WS_CHILD) | Native.WS_POPUP));
+            Native.SetWindowPos(Handle, IntPtr.Zero, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
+                Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED | Native.SWP_NOACTIVATE);
+        }
+
+        public void SetDesktopPin(bool value)
+        {
+            if (name == "settings") return;
+            pinned = value;
+            Settings.Set("widgetPinned/" + name, pinned ? "true" : "false");
+            ApplyDesktopPin();
+        }
+
+        public Dictionary<string, object> GetWidgetState()
+        {
+            Dictionary<string, object> state = new Dictionary<string, object>();
+            state["pinned"] = pinned;
+            return state;
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            // explorer 重启后桌面宿主会被重建,重新挂载
+            if (TaskbarCreatedMsg != 0 && m.Msg == (int)TaskbarCreatedMsg && pinned && IsHandleCreated)
+            {
+                try { DetachFromDesktop(); AttachToDesktop(); } catch { }
+            }
+            base.WndProc(ref m);
         }
 
         void OnWv2Init(object sender, CoreWebView2InitializationCompletedEventArgs e)
@@ -381,6 +509,11 @@ namespace DeskFlow
                 case "setAlwaysOnTop":
                     TopMost = args.Length > 0 && args[0].ToString() == "True";
                     return true;
+                case "setDesktopPin":
+                    SetDesktopPin(args.Length > 0 && args[0].ToString() == "True");
+                    return true;
+                case "getWidgetState":
+                    return GetWidgetState();
                 case "resizeWindow":
                     ResizeToContent(args.Length > 0 ? int.Parse(args[0].ToString()) : 0, args.Length > 1 ? int.Parse(args[1].ToString()) : 0);
                     return true;
@@ -678,7 +811,11 @@ namespace DeskFlow
         void RequestQuit()
         {
             quitting = true;
-            foreach (WidgetForm w in Windows.Values) w.Close();
+            foreach (WidgetForm w in Windows.Values)
+            {
+                try { w.DetachFromDesktop(); } catch { }
+                w.Close();
+            }
             tray.Visible = false;
             Application.Exit();
         }
