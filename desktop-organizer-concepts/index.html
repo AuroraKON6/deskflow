@@ -9,8 +9,10 @@
     const desktopParams = new URLSearchParams(location.search);
     window.desktopWidgetMode = desktopParams.get('widget');
     window.desktopManualSize = desktopParams.get('manual') === '1';
+    window.desktopSettingsMode = window.desktopWidgetMode === 'settings';
     if (window.desktopWidgetMode) document.documentElement.dataset.desktopWidget = window.desktopWidgetMode;
     if (window.desktopManualSize) document.documentElement.classList.add('native-manual-size');
+    if (window.desktopSettingsMode) document.documentElement.classList.add('native-settings-window');
   </script>
   <style>
     /* Primitive tokens */
@@ -904,7 +906,24 @@
     html.native-resize-ns, html.native-resize-ns * { cursor: ns-resize !important; }
     html.native-resize-nwse, html.native-resize-nwse * { cursor: nwse-resize !important; }
     html.native-resize-nesw, html.native-resize-nesw * { cursor: nesw-resize !important; }
-    @media (max-width: 620px) { .module-options { grid-template-columns: 1fr; } .module-card { min-height: 86px; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; align-items: center; } .launcher-head h2 { font-size: 23px; } }
+
+    /* Native settings window: the launcher panel as a standalone floating card. */
+    html[data-desktop-widget="settings"] .launcher-overlay {
+      display: grid !important;
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      padding: 16px 16px 32px 16px;
+      align-items: start;
+      justify-items: stretch;
+    }
+    html[data-desktop-widget="settings"] .launcher-overlay.closed { display: none !important; }
+    html[data-desktop-widget="settings"] .launcher-panel { width: 520px; }
+    html.native-settings-window .launcher-head { cursor: grab; user-select: none; }
+    html.native-settings-window .launcher-head:active { cursor: grabbing; }
+
+    @media (max-width: 540px) { .module-options { grid-template-columns: 1fr; } .module-card { min-height: 86px; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; align-items: center; } .launcher-head h2 { font-size: 23px; } }
     .particle { position: fixed; z-index: 90; width: 6px; height: 6px; background: var(--color-success); pointer-events: none; animation: particle-out 700ms var(--ease-out) forwards; }
     @keyframes particle-out { to { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); } }
     .deadline-particle { position: fixed; z-index: 140; width: var(--size); height: calc(var(--size) * 1.8); background: var(--blast-color); clip-path: polygon(50% 0, 100% 100%, 50% 78%, 0 100%); pointer-events: none; animation: deadline-particle-out 980ms var(--ease-out) forwards; }
@@ -1190,6 +1209,7 @@
           resetPosition: () => native.resetPosition(),
           hideWindow: () => native.hideWindow(),
           openSwitcher: () => native.openSwitcher(),
+          getSettings: () => callNative('getSettings'),
         };
         document.documentElement.classList.add('native-app');
         syncEmbeddedWindowSize();
@@ -1211,6 +1231,7 @@
     const launcherReopen = document.getElementById('launcher-reopen');
     const autostartEnabled = document.getElementById('autostart-enabled');
     const launcherInputs = [...launcherForm.querySelectorAll('.module-choice input')];
+    const settingsMode = embeddedWidget === 'settings';
     let savedWidgetSelection = ['todo', 'countdown', 'files'];
     try {
       const storedSelection = JSON.parse(localStorage.getItem('desk-enabled-widgets') || 'null');
@@ -1329,6 +1350,54 @@
       syncEmbeddedWindowSize();
     }
 
+    let settingsResizeObserver = null;
+    function syncSettingsWindowSize() {
+      if (!settingsMode || !window.desktopBridge?.resizeWindow) return;
+      const measure = () => {
+        const panel = document.querySelector('.launcher-panel');
+        if (!panel) return;
+        const rect = panel.getBoundingClientRect();
+        if (rect.width < 80 || rect.height < 80) return;
+        window.desktopBridge.resizeWindow(Math.ceil(rect.width + 32), Math.ceil(rect.height + 48));
+      };
+      requestAnimationFrame(measure);
+      setTimeout(measure, 120);
+    }
+    function setupSettingsWindow() {
+      if (!settingsMode || settingsResizeObserver) return;
+      const panel = document.querySelector('.launcher-panel');
+      if (!panel) return;
+      settingsResizeObserver = new ResizeObserver(syncSettingsWindowSize);
+      settingsResizeObserver.observe(panel);
+      window.addEventListener('resize', syncSettingsWindowSize);
+      syncSettingsWindowSize();
+      setTimeout(syncSettingsWindowSize, 400);
+      setTimeout(syncSettingsWindowSize, 1200);
+    }
+    async function loadNativeSettings() {
+      if (!settingsMode || !window.desktopBridge?.getSettings) return;
+      try {
+        const state = await window.desktopBridge.getSettings();
+        if (!state) return;
+        if (Array.isArray(state.modules)) {
+          savedWidgetSelection = state.modules.filter(name => launcherInputs.some(input => input.value === name));
+        }
+        if (typeof state.autoStart === 'boolean') autostartEnabled.checked = state.autoStart;
+        loadLauncherSelection();
+      } catch (_) {}
+    }
+    if (settingsMode) {
+      const launcherHead = launcherForm.querySelector('.launcher-head');
+      launcherHead.addEventListener('pointerdown', event => {
+        if (event.target.closest('button, input, label')) return;
+        event.preventDefault();
+        window.desktopBridge?.beginMove?.();
+      });
+      window.addEventListener('keydown', event => {
+        if (event.key === 'Escape') window.desktopBridge?.hideWindow?.();
+      });
+    }
+
     launcherMaster.addEventListener('change', () => {
       const turnOn = launcherMaster.checked;
       launcherInputs.forEach(input => { input.checked = turnOn; });
@@ -1341,6 +1410,12 @@
       localStorage.setItem('desk-enabled-widgets', JSON.stringify(savedWidgetSelection));
       localStorage.setItem('desk-autostart-enabled', String(autostartEnabled.checked));
       applyWidgetSelection(savedWidgetSelection);
+      if (settingsMode) {
+        window.desktopBridge?.setEnabledModules?.(savedWidgetSelection);
+        window.desktopBridge?.setAutoStart?.(autostartEnabled.checked);
+        window.desktopBridge?.hideWindow?.();
+        return;
+      }
       closeLauncher();
       window.desktopBridge?.setEnabledModules?.(savedWidgetSelection);
       window.desktopBridge?.setAutoStart?.(autostartEnabled.checked);
@@ -1349,10 +1424,18 @@
     launcherReopen.addEventListener('click', () => embeddedWidget ? window.desktopBridge?.openSwitcher?.() : openLauncher());
     loadLauncherSelection();
     if (embeddedWidget) {
-      launcherOverlay.classList.add('closed');
-      launcherOverlay.setAttribute('aria-hidden', 'true');
-      stage.inert = false;
-      setupEmbeddedWindow();
+      if (settingsMode) {
+        launcherOverlay.classList.remove('closed');
+        launcherOverlay.setAttribute('aria-hidden', 'false');
+        stage.inert = true;
+        setupSettingsWindow();
+        loadNativeSettings();
+      } else {
+        launcherOverlay.classList.add('closed');
+        launcherOverlay.setAttribute('aria-hidden', 'true');
+        stage.inert = false;
+        setupEmbeddedWindow();
+      }
     } else {
       openLauncher();
     }

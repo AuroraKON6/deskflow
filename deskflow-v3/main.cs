@@ -125,7 +125,8 @@ namespace DeskFlow
     resizeWindow: function (w, h) { return call('resizeWindow', w, h); },
     resetPosition: function () { return call('resetPosition'); },
     hideWindow: function () { return call('hideWindow'); },
-    openSwitcher: function () { return call('openSwitcher'); }
+    openSwitcher: function () { return call('openSwitcher'); },
+    getSettings: function () { return call('getSettings'); }
   };
 })();";
     }
@@ -147,6 +148,7 @@ namespace DeskFlow
         public WidgetForm(string widgetName)
         {
             name = widgetName;
+            bool isSettings = name == "settings";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             BackColor = Color.Black;
@@ -155,17 +157,21 @@ namespace DeskFlow
             Text = Settings.AppName + " · " + Controller.ModuleTitle(widgetName);
 
             double s = DpiScale();
-            manualSize = "true" == Settings.Get("widgetManualSize/" + widgetName);
+            manualSize = !isSettings && "true" == Settings.Get("widgetManualSize/" + widgetName);
             int w, h;
-            string[] storedSize = Settings.GetList("widgetSize/" + widgetName);
-            if (manualSize && storedSize != null && storedSize.Length == 2)
+            if (isSettings) { w = 552; h = 430; }
+            else
             {
-                int.TryParse(storedSize[0], out w);
-                int.TryParse(storedSize[1], out h);
-                if (w < 100) w = Controller.InitialSize(widgetName, 0);
-                if (h < 50) h = Controller.InitialSize(widgetName, 1);
+                string[] storedSize = Settings.GetList("widgetSize/" + widgetName);
+                if (manualSize && storedSize != null && storedSize.Length == 2)
+                {
+                    int.TryParse(storedSize[0], out w);
+                    int.TryParse(storedSize[1], out h);
+                    if (w < 100) w = Controller.InitialSize(widgetName, 0);
+                    if (h < 50) h = Controller.InitialSize(widgetName, 1);
+                }
+                else { w = Controller.InitialSize(widgetName, 0); h = Controller.InitialSize(widgetName, 1); }
             }
-            else { w = Controller.InitialSize(widgetName, 0); h = Controller.InitialSize(widgetName, 1); }
             Size = new Size((int)(w * s), (int)(h * s));
 
             string[] pos = Settings.GetList("widgetPosition/" + widgetName);
@@ -203,6 +209,8 @@ namespace DeskFlow
             int right = area.Right;
             int bottom = area.Bottom;
             int w = Width, h = Height;
+            if (name == "settings")
+                return new Point(area.Left + Math.Max(0, (area.Width - w) / 2), area.Top + Math.Max(24, (area.Height - h) / 3));
             if (name == "todo") return new Point(right - w - 24, area.Top + 28);
             if (name == "countdown")
             {
@@ -240,7 +248,9 @@ namespace DeskFlow
             // AllowExternalDrop defaults to true on the WinForms control
             cv.AddScriptToExecuteOnDocumentCreatedAsync(Bridge.Shim);
             cv.SetVirtualHostNameToFolderMapping("app.deskflow.local", Controller.ConceptsPath(), CoreWebView2HostResourceAccessKind.Allow);
-            cv.Navigate("https://app.deskflow.local/index.html?widget=" + name + (manualSize ? "&manual=1" : ""));
+            string query = "?widget=" + name;
+            if (manualSize) query += "&manual=1";
+            cv.Navigate("https://app.deskflow.local/index.html" + query);
         }
 
         void OnMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
@@ -260,10 +270,77 @@ namespace DeskFlow
             string method = data.TryGetValue("method", out methodObj) ? methodObj.ToString() : null;
             if (method == null) return;
             object argsObj;
-            object[] args = data.TryGetValue("args", out argsObj) && argsObj is object[] ? (object[])argsObj : new object[0];
+            object[] args = new object[0];
+            if (data.TryGetValue("args", out argsObj))
+            {
+                // JavaScriptSerializer yields Collection<object> (not object[]) for nested JSON arrays
+                System.Collections.IEnumerable seq = argsObj as System.Collections.IEnumerable;
+                if (seq != null && !(argsObj is string))
+                {
+                    List<object> list = new List<object>();
+                    foreach (object o in seq) list.Add(o);
+                    args = list.ToArray();
+                }
+            }
             object result = Dispatch(method, args);
+            if (Environment.GetEnvironmentVariable("DESKFLOW_DEBUG") == "1")
+            {
+                StringBuilder dbg = new StringBuilder(DateTime.Now.ToString("HH:mm:ss.fff")).Append(' ').Append(name).Append(' ').Append(method).Append(" raw=").Append(e.WebMessageAsJson).Append('\n');
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "deskflow-debug.log"), dbg.ToString());
+            }
             if (id != 0)
-                web.CoreWebView2.PostWebMessageAsJson("{\"id\":" + id + ",\"result\":" + (result is bool ? (bool)result ? "true" : "false" : "true") + "}");
+                web.CoreWebView2.PostWebMessageAsJson("{\"id\":" + id + ",\"result\":" + ToJson(result) + "}");
+        }
+
+        // minimal JSON writer: bool / number / string / enumerable / dictionary
+        static string ToJson(object value)
+        {
+            if (value == null) return "null";
+            if (value is bool) return (bool)value ? "true" : "false";
+            if (value is int || value is long || value is double)
+                return Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+            string text = value as string;
+            if (text != null)
+            {
+                StringBuilder sb = new StringBuilder("\"");
+                foreach (char ch in text)
+                {
+                    if (ch == '"' || ch == '\\') { sb.Append('\\'); sb.Append(ch); }
+                    else if (ch == '\n') sb.Append("\\n");
+                    else if (ch == '\r') sb.Append("\\r");
+                    else if (ch == '\t') sb.Append("\\t");
+                    else if (ch < ' ') sb.Append("\\u").Append(((int)ch).ToString("x4"));
+                    else sb.Append(ch);
+                }
+                return sb.Append('"').ToString();
+            }
+            IDictionary<string, object> dict = value as IDictionary<string, object>;
+            if (dict != null)
+            {
+                StringBuilder sb = new StringBuilder("{");
+                bool first = true;
+                foreach (KeyValuePair<string, object> kv in dict)
+                {
+                    if (!first) sb.Append(',');
+                    first = false;
+                    sb.Append(ToJson(kv.Key)).Append(':').Append(ToJson(kv.Value));
+                }
+                return sb.Append('}').ToString();
+            }
+            System.Collections.IEnumerable list = value as System.Collections.IEnumerable;
+            if (list != null)
+            {
+                StringBuilder sb = new StringBuilder("[");
+                bool first = true;
+                foreach (object item in list)
+                {
+                    if (!first) sb.Append(',');
+                    first = false;
+                    sb.Append(ToJson(item));
+                }
+                return sb.Append(']').ToString();
+            }
+            return ToJson(value.ToString());
         }
 
         object Dispatch(string method, object[] args)
@@ -275,8 +352,9 @@ namespace DeskFlow
                 case "copyFiles":
                     {
                         List<string> paths = new List<string>();
-                        if (args.Length > 0 && args[0] is object[])
-                            foreach (object o in (object[])args[0]) paths.Add(o.ToString());
+                        System.Collections.IEnumerable copied = args.Length > 0 ? args[0] as System.Collections.IEnumerable : null;
+                        if (copied != null && !(args[0] is string))
+                            foreach (object o in copied) paths.Add(o.ToString());
                         return c.CopyFiles(paths.ToArray());
                     }
                 case "chooseFiles": return c.ChooseFiles(this);
@@ -286,8 +364,9 @@ namespace DeskFlow
                 case "setEnabledModules":
                     {
                         List<string> m = new List<string>();
-                        if (args.Length > 0 && args[0] is object[])
-                            foreach (object o in (object[])args[0]) m.Add(o.ToString());
+                        System.Collections.IEnumerable enabled = args.Length > 0 ? args[0] as System.Collections.IEnumerable : null;
+                        if (enabled != null && !(args[0] is string))
+                            foreach (object o in enabled) m.Add(o.ToString());
                         c.ApplySelection(m.ToArray());
                         return true;
                     }
@@ -308,9 +387,10 @@ namespace DeskFlow
                 case "resetPosition": Location = DefaultPosition(); return true;
                 case "hideWindow":
                     Hide();
-                    c.OnWidgetHidden(name);
+                    if (name != "settings") c.OnWidgetHidden(name);
                     return true;
-                case "openSwitcher": c.ShowSwitcher(); return true;
+                case "openSwitcher": c.ShowSettings(); return true;
+                case "getSettings": return c.GetSettings();
             }
             return false;
         }
@@ -334,8 +414,11 @@ namespace DeskFlow
             if (manualSize) return;
             double s = DpiScale();
             Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            int w = Math.Max(220, Math.Min((int)(width * s), area.Width - 20));
-            int h = Math.Max(70, Math.Min((int)(height * s), area.Height - 20));
+            bool isSettings = name == "settings";
+            int minW = isSettings ? 380 : 220;
+            int minH = isSettings ? 320 : 70;
+            int w = Math.Max(minW, Math.Min((int)(width * s), area.Width - 20));
+            int h = Math.Max(minH, Math.Min((int)(height * s), area.Height - 20));
             if (ClientSize.Width != w || ClientSize.Height != h) ClientSize = new Size(w, h);
             int x = Math.Max(area.Left, Math.Min(Location.X, area.Right - w));
             int y = Math.Max(area.Top, Math.Min(Location.Y, area.Bottom - h));
@@ -353,77 +436,6 @@ namespace DeskFlow
             double s = DpiScale();
             Settings.SetList("widgetSize/" + name, new[] { ((int)(Width / s)).ToString(), ((int)(Height / s)).ToString() });
         }
-    }
-
-    public class StartupDialog : Form
-    {
-        readonly Dictionary<string, CheckBox> checks = new Dictionary<string, CheckBox>();
-        CheckBox autoBox;
-
-        public StartupDialog(string[] selected, bool autoStart)
-        {
-            double s = WidgetForm_Helper.Scale();
-            Text = "序 · 桌面组件选择";
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            StartPosition = FormStartPosition.CenterScreen;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            ClientSize = new Size((int)(360 * s), (int)(330 * s));
-            Font ui = new Font("Microsoft YaHei UI", 10);
-
-            Label label = new Label();
-            label.Text = "今天在桌面上放哪些组件?";
-            label.Font = new Font("Microsoft YaHei UI", 12, FontStyle.Bold);
-            label.AutoSize = true;
-            label.Location = new Point((int)(24 * s), (int)(20 * s));
-            Controls.Add(label);
-
-            int y = (int)(62 * s);
-            foreach (KeyValuePair<string, string[]> kv in Controller.Modules())
-            {
-                CheckBox cb = new CheckBox();
-                cb.Text = kv.Value[0] + " — " + kv.Value[1];
-                cb.Checked = Array.IndexOf(selected, kv.Key) >= 0;
-                cb.AutoSize = true;
-                cb.Location = new Point((int)(26 * s), y);
-                cb.Font = ui;
-                checks[kv.Key] = cb;
-                Controls.Add(cb);
-                y += (int)(36 * s);
-            }
-            autoBox = new CheckBox();
-            autoBox.Text = "开机自动启动";
-            autoBox.Checked = autoStart;
-            autoBox.AutoSize = true;
-            autoBox.Location = new Point((int)(26 * s), y + (int)(4 * s));
-            autoBox.Font = ui;
-            Controls.Add(autoBox);
-
-            Button cancel = new Button();
-            cancel.Text = "取消";
-            cancel.Location = new Point((int)(150 * s), y + (int)(48 * s));
-            cancel.Size = new Size((int)(88 * s), (int)(34 * s));
-            cancel.Font = ui;
-            cancel.Click += delegate { DialogResult = DialogResult.Cancel; };
-            Controls.Add(cancel);
-            Button ok = new Button();
-            ok.Text = "放到桌面上 →";
-            ok.Location = new Point((int)(244 * s), y + (int)(48 * s));
-            ok.Size = new Size((int)(96 * s), (int)(34 * s));
-            ok.Font = ui;
-            ok.Click += delegate { DialogResult = DialogResult.OK; };
-            Controls.Add(ok);
-            AcceptButton = ok;
-            CancelButton = cancel;
-        }
-        public List<string> Selection()
-        {
-            List<string> list = new List<string>();
-            foreach (KeyValuePair<string, CheckBox> kv in checks)
-                if (kv.Value.Checked) list.Add(kv.Key);
-            return list;
-        }
-        public bool AutoStart { get { return autoBox.Checked; } }
     }
 
     // workaround: expose scale for dialog (WidgetForm.DpiScale is private)
@@ -462,6 +474,7 @@ namespace DeskFlow
         }
         public static string ModuleTitle(string name)
         {
+            if (name == "settings") return "设置";
             for (int i = 0; i < moduleDefs.Length; i++)
                 if (moduleDefs[i][0] == name) return moduleDefs[i][1];
             return name;
@@ -516,9 +529,10 @@ namespace DeskFlow
         void BuildTray()
         {
             ContextMenuStrip menu = new ContextMenuStrip();
-            ToolStripMenuItem sw = new ToolStripMenuItem("选择桌面组件…");
-            sw.Click += delegate { ShowSwitcher(); };
-            menu.Items.Add(sw);
+            ToolStripMenuItem settings = new ToolStripMenuItem("设置…");
+            settings.Font = new Font(menu.Font, FontStyle.Bold);
+            settings.Click += delegate { ShowSettings(); };
+            menu.Items.Add(settings);
             menu.Items.Add(new ToolStripSeparator());
             string[] selected = SelectedModules();
             foreach (KeyValuePair<string, string[]> kv in Modules())
@@ -541,7 +555,7 @@ namespace DeskFlow
             tray.Text = Settings.AppName;
             tray.ContextMenuStrip = menu;
             tray.Visible = true;
-            tray.MouseDoubleClick += delegate { ShowSwitcher(); };
+            tray.MouseDoubleClick += delegate { ShowSettings(); };
         }
 
         public void Startup()
@@ -556,25 +570,28 @@ namespace DeskFlow
                 ApplySelection(list.ToArray());
                 return;
             }
-            string[] current = SelectedModules();
-            ShowSwitcher();
-            bool anyVisible = false;
-            foreach (WidgetForm w in Windows.Values) if (w.Visible) anyVisible = true;
-            if (!anyVisible)
-            {
-                string[] now = SelectedModules();
-                ApplySelection(now.Length == current.Length ? current : now);
-            }
+            ApplySelection(SelectedModules());
+            ShowSettings();
         }
 
-        public void ShowSwitcher()
+        public void ShowSettings()
         {
-            StartupDialog dlg = new StartupDialog(SelectedModules(), "true" == Settings.Get("autoStart"));
-            if (dlg.ShowDialog() == DialogResult.OK)
+            WidgetForm window;
+            if (!Windows.TryGetValue("settings", out window))
             {
-                ApplySelection(dlg.Selection().ToArray());
-                SetAutoStart(dlg.AutoStart);
+                window = new WidgetForm("settings");
+                Windows["settings"] = window;
             }
+            window.Show();
+            window.Activate();
+        }
+
+        public Dictionary<string, object> GetSettings()
+        {
+            Dictionary<string, object> state = new Dictionary<string, object>();
+            state["modules"] = SelectedModules();
+            state["autoStart"] = Settings.Get("autoStart") != "false";
+            return state;
         }
 
         public void ApplySelection(string[] modules)
@@ -589,13 +606,14 @@ namespace DeskFlow
 
         public void SetWidgetVisible(string name, bool visible, bool persist)
         {
-            WidgetForm window = null;
-            if (visible && !Windows.TryGetValue(name, out window))
+            WidgetForm window;
+            bool exists = Windows.TryGetValue(name, out window);
+            if (visible && !exists)
             {
                 window = new WidgetForm(name);
                 Windows[name] = window;
             }
-            if (visible && window != null) window.Show();
+            if (visible) { if (window != null) window.Show(); }
             else if (window != null) window.Hide();
             ToolStripMenuItem mi;
             if (moduleItems.TryGetValue(name, out mi) && mi.Checked != visible) mi.Checked = visible;

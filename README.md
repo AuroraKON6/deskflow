@@ -40,6 +40,10 @@ cd desktop-organizer-app
 ## 修复记录
 
 - 2026-08-13:修复手动尺寸模式下嵌入窗口内三个页面全部堆叠渲染(CSS 优先级 bug,`.widget:not(.module-off)`)
+- 2026-09-04:v3 设置窗口上线 —— 用 HTML 启动器面板(总开关 + 三模块开关 + 开机自启)替换 WinForms 启动对话框,托盘「设置…」/ 组件菜单「窗口总开关…」/ 双击托盘均可打开
+- 2026-09-04:修复 v3 桥接参数丢失(JavaScriptSerializer 把嵌套数组反序列化为 `Collection<object>`,`is object[]` 判断失败导致 resizeWindow / setEnabledModules / copyFiles 全部按空参数执行)
+- 2026-09-04:修复 v3 从设置/托盘关闭模块时窗口不隐藏(`TryGetValue` 只在 visible 分支执行,移植自 v2 时引入)
+- 2026-09-04:启动黑框与三页面黑边的根因是 v2 —— python.exe 控制台宿主 + `WS_EX_NOREDIRECTIONBITMAP` 在窗口显示后才设置且未生效;v3(CreateParams 提前设置 + GUI 子系统)两者皆无,v2 自启命令也已改用 pythonw.exe 兜底
 
 ## 许可
 
