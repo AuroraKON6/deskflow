@@ -26,66 +26,15 @@ namespace DeskFlow
         [DllImport("kernel32.dll")] public static extern uint GetLastError();
         [DllImport("shcore.dll")] public static extern int SetProcessDpiAwareness(int value);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowW(string cls, string title);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr FindWindowExW(IntPtr parent, IntPtr after, string cls, string title);
-        [DllImport("user32.dll")] public static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
-        [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr hwnd);
-        [DllImport("user32.dll")] public static extern int GetWindowLongW(IntPtr hwnd, int index);
-        [DllImport("user32.dll")] public static extern int SetWindowLongW(IntPtr hwnd, int index, int value);
-        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+        [DllImport("user32.dll", EntryPoint = "GetWindow")] public static extern IntPtr GetWindowW(IntPtr hwnd, uint cmd);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern uint RegisterWindowMessageW(string name);
 
-        public const int GWL_STYLE = -16;
-        public const long WS_CHILD = 0x40000000L;
-        public const long WS_POPUP = 0x80000000L;
-        public const uint SWP_NOZORDER = 0x0004;
-        public const uint SWP_FRAMECHANGED = 0x0020;
+        public const uint GW_HWNDNEXT = 2;
+        public static readonly IntPtr HwndBottom = new IntPtr(1);
+        public const uint SWP_NOSIZE = 0x0001;
+        public const uint SWP_NOMOVE = 0x0002;
         public const uint SWP_NOACTIVATE = 0x0010;
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct RECT { public int Left, Top, Right, Bottom; }
-    }
-
-    // 桌面层宿主(Progman/WorkerW):把窗口 SetParent 到这里 = 钉在桌面上,
-    // 位于壁纸与桌面图标之上、所有普通程序窗口之下(Rainmeter「On Desktop」同款方案)。
-    static class DesktopShell
-    {
-        static bool spawnAttempted; // 0x052C 每进程只发一次,避免反复生成无用 WorkerW
-
-        public static IntPtr FindHost()
-        {
-            IntPtr host = FindWorkerBehindIcons();
-            if (host != IntPtr.Zero) return host;
-            IntPtr progman = Native.FindWindowW("Progman", null);
-            if (progman == IntPtr.Zero) return IntPtr.Zero;
-            if (!spawnAttempted)
-            {
-                spawnAttempted = true;
-                Native.SendMessageW(progman, 0x052C, IntPtr.Zero, IntPtr.Zero); // 让 shell 在图标层后面生成 WorkerW
-                host = FindWorkerBehindIcons();
-                if (host != IntPtr.Zero) return host;
-            }
-            return progman; // 兜底:直接挂 Progman(此时会盖住图标层)
-        }
-
-        static IntPtr FindWorkerBehindIcons()
-        {
-            IntPtr worker = IntPtr.Zero, defViewHolder = IntPtr.Zero;
-            while ((worker = Native.FindWindowExW(IntPtr.Zero, worker, "WorkerW", null)) != IntPtr.Zero)
-            {
-                if (Native.FindWindowExW(worker, IntPtr.Zero, "SHELLDLL_DefView", null) != IntPtr.Zero)
-                {
-                    defViewHolder = worker;
-                    break;
-                }
-            }
-            if (defViewHolder != IntPtr.Zero)
-            {
-                IntPtr behind = Native.FindWindowExW(IntPtr.Zero, defViewHolder, "WorkerW", null);
-                if (behind != IntPtr.Zero) return behind;
-            }
-            return IntPtr.Zero;
-        }
     }
 
     static class Settings
@@ -260,6 +209,7 @@ namespace DeskFlow
             Shown += OnShown;
             Move += OnMoved;
             Resize += OnResized;
+            Deactivate += OnDeactivated;
         }
 
         static double DpiScale()
@@ -306,40 +256,30 @@ namespace DeskFlow
         }
 
         // ---- 桌面钉住 ----
+        // 顶层窗口 + z 序压到桌面(Progman)之上、所有程序之下。
+        // 不用 SetParent:挂成桌面子窗口后 WebView2 的 alpha 合成会失效,透明处发黑。
         static readonly uint TaskbarCreatedMsg = Native.RegisterWindowMessageW("TaskbarCreated");
 
         void ApplyDesktopPin()
         {
             if (name == "settings") return;
-            if (pinned) AttachToDesktop(); else DetachFromDesktop();
+            if (pinned) PinToDesktop();
         }
 
-        void AttachToDesktop()
+        void PinToDesktop()
         {
-            if (Handle == IntPtr.Zero || Native.GetParent(Handle) != IntPtr.Zero) return;
-            IntPtr host = DesktopShell.FindHost();
-            if (host == IntPtr.Zero) return;
+            if (!IsHandleCreated) return;
             TopMost = false;
-            Native.RECT r;
-            Native.GetWindowRect(Handle, out r);
-            int style = Native.GetWindowLongW(Handle, Native.GWL_STYLE);
-            Native.SetWindowLongW(Handle, Native.GWL_STYLE, (int)((style | Native.WS_CHILD) & ~Native.WS_POPUP));
-            Native.SetParent(Handle, host);
-            // 换父后坐标按宿主客户区解释;宿主铺满主屏且原点为 0,0,显式摆回原屏幕位置
-            Native.SetWindowPos(Handle, IntPtr.Zero, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
-                Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED | Native.SWP_NOACTIVATE);
-        }
-
-        public void DetachFromDesktop()
-        {
-            if (Handle == IntPtr.Zero || Native.GetParent(Handle) == IntPtr.Zero) return;
-            Native.RECT r;
-            Native.GetWindowRect(Handle, out r);
-            Native.SetParent(Handle, IntPtr.Zero);
-            int style = Native.GetWindowLongW(Handle, Native.GWL_STYLE);
-            Native.SetWindowLongW(Handle, Native.GWL_STYLE, (int)((style & ~Native.WS_CHILD) | Native.WS_POPUP));
-            Native.SetWindowPos(Handle, IntPtr.Zero, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
-                Native.SWP_NOZORDER | Native.SWP_FRAMECHANGED | Native.SWP_NOACTIVATE);
+            try
+            {
+                IntPtr progman = Native.FindWindowW("Progman", null);
+                if (progman == IntPtr.Zero) return;
+                IntPtr above = Native.GetWindowW(progman, Native.GW_HWNDNEXT); // 紧贴 Progman 之上的窗口
+                IntPtr after = above != IntPtr.Zero ? above : Native.HwndBottom;
+                Native.SetWindowPos(Handle, after, 0, 0, 0, 0,
+                    Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            }
+            catch { } // 钉住失败不影响组件本身
         }
 
         public void SetDesktopPin(bool value)
@@ -359,12 +299,18 @@ namespace DeskFlow
 
         protected override void WndProc(ref Message m)
         {
-            // explorer 重启后桌面宿主会被重建,重新挂载
+            // explorer 重启后桌面重建,重新压回桌面层
             if (TaskbarCreatedMsg != 0 && m.Msg == (int)TaskbarCreatedMsg && pinned && IsHandleCreated)
             {
-                try { DetachFromDesktop(); AttachToDesktop(); } catch { }
+                try { PinToDesktop(); } catch { }
             }
             base.WndProc(ref m);
+        }
+
+        void OnDeactivated(object sender, EventArgs e)
+        {
+            // 点击组件会临时浮起(便于交互);切去别的窗口就沉回桌面层
+            if (pinned && ready) PinToDesktop();
         }
 
         void OnWv2Init(object sender, CoreWebView2InitializationCompletedEventArgs e)
@@ -811,11 +757,7 @@ namespace DeskFlow
         void RequestQuit()
         {
             quitting = true;
-            foreach (WidgetForm w in Windows.Values)
-            {
-                try { w.DetachFromDesktop(); } catch { }
-                w.Close();
-            }
+            foreach (WidgetForm w in Windows.Values) w.Close();
             tray.Visible = false;
             Application.Exit();
         }
