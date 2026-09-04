@@ -922,6 +922,21 @@
     html[data-desktop-widget="settings"] .launcher-panel { width: 520px; }
     html.native-settings-window .launcher-head { cursor: grab; user-select: none; }
     html.native-settings-window .launcher-head:active { cursor: grabbing; }
+    .launcher-close { display: none; }
+    html[data-desktop-widget="settings"] .launcher-close {
+      display: grid !important;
+      place-items: center;
+      width: 34px; height: 34px;
+      margin: 6px 14px 0 0;
+      border: 1.5px solid var(--color-line);
+      border-radius: var(--radius-xs);
+      color: var(--color-text);
+      background: var(--p-paper-100);
+      cursor: pointer;
+    }
+    html[data-desktop-widget="settings"] .launcher-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+    html[data-desktop-widget="settings"] .launcher-close:hover { color: var(--color-inverse); background: var(--color-danger); border-color: var(--color-danger); }
+    html[data-desktop-widget="settings"] .launcher-close:active { transform: translateY(1px); }
 
     @media (max-width: 540px) { .module-options { grid-template-columns: 1fr; } .module-card { min-height: 86px; grid-template-columns: auto 1fr auto; grid-template-rows: 1fr; align-items: center; } .launcher-head h2 { font-size: 23px; } }
     .particle { position: fixed; z-index: 90; width: 6px; height: 6px; background: var(--color-success); pointer-events: none; animation: particle-out 700ms var(--ease-out) forwards; }
@@ -1155,6 +1170,9 @@
     <form class="launcher-panel" id="launcher-form">
       <div class="launcher-head">
         <div><div class="launcher-kicker">DESKTOP / STARTUP</div><h2 id="launcher-title">今天打开哪些窗口？</h2><p>每次启动都会先在这里确认，不会擅自铺满桌面。</p></div>
+        <button class="launcher-close" id="launcher-close" type="button" aria-label="关闭" title="关闭（Esc）">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
         <label class="master-switch"><span>总开关</span><input id="launcher-master" type="checkbox" checked /><span class="switch-track" aria-hidden="true"></span></label>
       </div>
       <div class="module-options">
@@ -1394,6 +1412,9 @@
         if (event.target.closest('button, input, label')) return;
         event.preventDefault();
         window.desktopBridge?.beginMove?.();
+      });
+      document.getElementById('launcher-close').addEventListener('click', () => {
+        window.desktopBridge?.hideWindow?.();
       });
       window.addEventListener('keydown', event => {
         if (event.key === 'Escape') window.desktopBridge?.hideWindow?.();
